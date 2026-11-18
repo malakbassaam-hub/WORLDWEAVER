@@ -1,0 +1,544 @@
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import type { Entity, EntityId, VisualComponent, World } from '../core/types';
+import { createArchetype, type ArchetypeInstance } from './archetypes';
+import { createEnvironment, disposeObject, FOG_COLOR, FOG_DENSITY, type Environment } from './environment';
+import { disposeSharedTextures } from './textures';
+
+export type QualityMode = 'cinematic' | 'performance';
+
+export interface RendererCallbacks {
+  onSelect(id: EntityId | null): void;
+  onHover?(id: EntityId | null, clientX: number, clientY: number): void;
+  onContextLost?(): void;
+}
+
+export interface RenderStats {
+  readonly fps: number;
+  readonly drawCalls: number;
+  readonly triangles: number;
+  readonly entities: number;
+}
+
+export class WebGLUnavailableError extends Error {
+  override readonly name = 'WebGLUnavailableError';
+}
+
+export function isWebGLAvailable(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return canvas.getContext('webgl2') !== null;
+  } catch {
+    return false;
+  }
+}
+
+interface Binding {
+  entity: Entity;
+  readonly root: THREE.Group;
+  readonly instance: ArchetypeInstance;
+  light: THREE.PointLight | null;
+}
+
+interface CameraTween {
+  readonly fromPos: THREE.Vector3;
+  readonly toPos: THREE.Vector3;
+  readonly fromTarget: THREE.Vector3;
+  readonly toTarget: THREE.Vector3;
+  readonly start: number;
+  readonly duration: number;
+}
+
+const HOME_TARGET = new THREE.Vector3(0, 9, 0);
+const HOME_POSITION = new THREE.Vector3(46, 19, 52);
+const INTRO_POSITION = new THREE.Vector3(118, 52, 132);
+const CLICK_TOLERANCE_PX = 5;
+
+const easeInOutCubic = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+
+/**
+ * Renders a World with three.js. The renderer is a pure observer of world
+ * state: it never mutates the World and reports user intent (selection) via
+ * callbacks. Presentation-only animation never feeds back into state.
+ */
+export class SceneRenderer {
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly scene = new THREE.Scene();
+  private readonly camera: THREE.PerspectiveCamera;
+  private readonly controls: OrbitControls;
+  private readonly environment: Environment;
+  private readonly entityRoot = new THREE.Group();
+  private readonly bindings = new Map<string, Binding>();
+  private readonly raycaster = new THREE.Raycaster();
+  private readonly ndc = new THREE.Vector2();
+  private readonly marker: THREE.Group;
+  private readonly markerMaterials: THREE.MeshBasicMaterial[] = [];
+  private readonly resizeObserver: ResizeObserver;
+  private readonly timer = new THREE.Timer();
+  private composer: EffectComposer | null = null;
+  private quality: QualityMode = 'cinematic';
+  private selectedId: EntityId | null = null;
+  private hoveredId: EntityId | null = null;
+  private pointerDown: { x: number; y: number } | null = null;
+  private pendingHover: { x: number; y: number } | null = null;
+  private tween: CameraTween | null = null;
+  private fps = 60;
+  private disposed = false;
+  private contextLost = false;
+
+  constructor(
+    private readonly container: HTMLElement,
+    private readonly callbacks: RendererCallbacks,
+    seed: number,
+  ) {
+    if (!isWebGLAvailable()) {
+      throw new WebGLUnavailableError('WebGL 2 is not available in this browser or has been disabled.');
+    }
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: false });
+    } catch (error) {
+      throw new WebGLUnavailableError(`Could not create a WebGL context: ${(error as Error).message}`);
+    }
+    this.renderer = renderer;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+    renderer.shadowMap.enabled = true;
+    // PCFSoftShadowMap was removed in three r0.18x; PCF is the supported soft-edged option.
+    renderer.shadowMap.type = THREE.PCFShadowMap;
+    renderer.info.autoReset = false;
+    renderer.domElement.className = 'ww-canvas';
+    renderer.domElement.setAttribute('aria-label', 'WORLDWEAVER 3D viewport');
+    container.appendChild(renderer.domElement);
+
+    this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 1400);
+    this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), FOG_DENSITY);
+    this.scene.background = FOG_COLOR.clone();
+
+    this.environment = createEnvironment(seed);
+    this.scene.add(this.environment.group);
+    this.entityRoot.name = 'entities';
+    this.scene.add(this.entityRoot);
+    this.marker = this.createMarker();
+    this.scene.add(this.marker);
+
+    this.controls = new OrbitControls(this.camera, renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.07;
+    this.controls.minDistance = 8;
+    this.controls.maxDistance = 190;
+    this.controls.maxPolarAngle = Math.PI * 0.56;
+    this.controls.screenSpacePanning = true;
+    this.controls.target.copy(HOME_TARGET);
+    this.controls.addEventListener('start', this.cancelTween);
+
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    this.camera.position.copy(reducedMotion ? HOME_POSITION : INTRO_POSITION);
+    this.camera.lookAt(HOME_TARGET);
+    if (!reducedMotion) this.flyTo(HOME_POSITION, HOME_TARGET, 3.4);
+
+    const canvas = renderer.domElement;
+    canvas.addEventListener('pointerdown', this.onPointerDown);
+    canvas.addEventListener('pointerup', this.onPointerUp);
+    canvas.addEventListener('pointermove', this.onPointerMove);
+    canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('webglcontextlost', this.onContextLost);
+    canvas.addEventListener('webglcontextrestored', this.onContextRestored);
+
+    this.resizeObserver = new ResizeObserver(() => this.resize());
+    this.resizeObserver.observe(container);
+    this.setQuality('cinematic');
+    renderer.setAnimationLoop(this.frame);
+  }
+
+  // ---------------------------------------------------------------- public API
+
+  /** Reconciles the scene with a world snapshot. Cheap for unchanged entities. */
+  sync(world: World): void {
+    const seen = new Set<string>();
+    for (const id of world.order) {
+      const entity = world.entities[id];
+      if (!entity) continue;
+      seen.add(id);
+      let binding = this.bindings.get(id);
+      if (!binding) {
+        binding = this.createBinding(entity);
+        this.bindings.set(id, binding);
+        this.applyEntity(binding, entity, true);
+      } else if (binding.entity !== entity) {
+        this.applyEntity(binding, entity, false);
+      }
+      const parent = (entity.parentId && this.bindings.get(entity.parentId)?.root) || this.entityRoot;
+      if (binding.root.parent !== parent) parent.add(binding.root);
+    }
+    for (const [id, binding] of this.bindings) {
+      if (!seen.has(id)) {
+        this.destroyBinding(binding);
+        this.bindings.delete(id);
+      }
+    }
+    if (this.selectedId && !this.bindings.has(this.selectedId)) this.selectedId = null;
+    this.refreshMarker();
+  }
+
+  setSelection(id: EntityId | null): void {
+    this.selectedId = id && this.bindings.has(id) ? id : null;
+    this.refreshMarker();
+  }
+
+  /** Temporarily shows a visual without changing world state (e.g. while dragging a slider). */
+  previewVisual(id: EntityId, visual: VisualComponent): void {
+    this.bindings.get(id)?.instance.applyVisual(visual);
+  }
+
+  /** Restores the committed visual after a cancelled or rejected preview. */
+  revertPreview(id: EntityId): void {
+    const binding = this.bindings.get(id);
+    const visual = binding?.entity.components.visual;
+    if (binding && visual) binding.instance.applyVisual(visual);
+  }
+
+  focus(id: EntityId): void {
+    const binding = this.bindings.get(id);
+    if (!binding) return;
+    const box = this.entityBounds(binding);
+    if (box.isEmpty()) return;
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const distance = THREE.MathUtils.clamp(sphere.radius * 2.8, 10, 130);
+    const direction = this.camera.position.clone().sub(this.controls.target).normalize();
+    if (direction.y < 0.15) direction.setY(0.15).normalize();
+    this.flyTo(sphere.center.clone().addScaledVector(direction, distance), sphere.center, 1.1);
+  }
+
+  resetCamera(): void {
+    this.flyTo(HOME_POSITION, HOME_TARGET, 1.4);
+  }
+
+  setQuality(mode: QualityMode): void {
+    this.quality = mode;
+    const ratio = mode === 'cinematic' ? Math.min(window.devicePixelRatio || 1, 1.5) : 1;
+    this.renderer.setPixelRatio(ratio);
+    this.environment.setPixelRatio(ratio);
+    this.environment.setShadows(mode === 'cinematic');
+    if (mode === 'cinematic' && !this.composer) this.composer = this.buildComposer();
+    if (mode === 'performance' && this.composer) {
+      this.disposeComposer(this.composer);
+      this.composer = null;
+    }
+    this.resize();
+  }
+
+  getQuality(): QualityMode {
+    return this.quality;
+  }
+
+  getStats(): RenderStats {
+    return {
+      fps: Math.round(this.fps),
+      drawCalls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
+      entities: this.bindings.size,
+    };
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.renderer.setAnimationLoop(null);
+    this.resizeObserver.disconnect();
+    const canvas = this.renderer.domElement;
+    canvas.removeEventListener('pointerdown', this.onPointerDown);
+    canvas.removeEventListener('pointerup', this.onPointerUp);
+    canvas.removeEventListener('pointermove', this.onPointerMove);
+    canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    canvas.removeEventListener('webglcontextlost', this.onContextLost);
+    canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
+    this.controls.removeEventListener('start', this.cancelTween);
+    this.controls.dispose();
+    for (const binding of this.bindings.values()) this.destroyBinding(binding);
+    this.bindings.clear();
+    this.environment.dispose();
+    this.marker.traverse(disposeObject);
+    if (this.composer) this.disposeComposer(this.composer);
+    disposeSharedTextures();
+    this.renderer.dispose();
+    canvas.remove();
+  }
+
+  // ---------------------------------------------------------------- bindings
+
+  private createBinding(entity: Entity): Binding {
+    const root = new THREE.Group();
+    root.name = entity.name;
+    root.userData.entityId = entity.id;
+    const instance = createArchetype(entity);
+    root.add(instance.body);
+    return { entity, root, instance, light: null };
+  }
+
+  private applyEntity(binding: Binding, entity: Entity, initial: boolean): void {
+    const { transform, visual, light } = entity.components;
+    binding.root.position.set(...transform.position);
+    binding.root.rotation.set(...transform.rotation);
+    binding.instance.body.scale.set(...transform.scale);
+    binding.root.name = entity.name;
+    if (visual && (initial || visual !== binding.entity.components.visual)) {
+      binding.instance.applyVisual(visual);
+    }
+    binding.root.visible = visual ? visual.visible : true;
+
+    if (light && !binding.light) {
+      binding.light = new THREE.PointLight(light.color, light.intensity, light.range, 2);
+      (binding.instance.lightAnchor ?? binding.root).add(binding.light);
+    } else if (!light && binding.light) {
+      binding.light.removeFromParent();
+      binding.light.dispose();
+      binding.light = null;
+    }
+    if (light && binding.light) {
+      // Presentation rule: a light is tinted by the entity's glow colour and
+      // scales with glow intensity, so visual edits are visible in the lighting.
+      binding.light.color.set(visual?.emissive ?? light.color);
+      binding.light.intensity = light.intensity * (visual ? visual.emissiveIntensity / 4 : 1);
+      binding.light.distance = light.range;
+    }
+    binding.entity = entity;
+  }
+
+  private destroyBinding(binding: Binding): void {
+    binding.root.removeFromParent();
+    binding.instance.body.traverse(disposeObject);
+    binding.light?.dispose();
+  }
+
+  // ---------------------------------------------------------------- selection
+
+  private createMarker(): THREE.Group {
+    const group = new THREE.Group();
+    group.name = 'selection-marker';
+    group.visible = false;
+    const make = (hex: string, k: number) => {
+      const m = new THREE.MeshBasicMaterial({
+        color: new THREE.Color(hex).multiplyScalar(k),
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+      });
+      this.markerMaterials.push(m);
+      return m;
+    };
+    const cyan = make('#40e0ff', 2.4);
+    const violet = make('#9b6bff', 2.0);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.97, 1.0, 128), cyan);
+    const arc = new THREE.Mesh(new THREE.RingGeometry(1.07, 1.1, 128, 1, 0, Math.PI * 1.35), violet);
+    ring.rotation.x = arc.rotation.x = -Math.PI / 2;
+    group.add(ring, arc);
+    for (let i = 0; i < 4; i++) {
+      const tick = new THREE.Mesh(new THREE.PlaneGeometry(0.03, 0.12), cyan);
+      const a = (i / 4) * Math.PI * 2;
+      tick.position.set(Math.cos(a) * 1.0, 0, Math.sin(a) * 1.0);
+      tick.rotation.set(-Math.PI / 2, 0, -a + Math.PI / 2);
+      group.add(tick);
+    }
+    group.traverse((o) => (o.renderOrder = 999));
+    return group;
+  }
+
+  private refreshMarker(): void {
+    const binding = this.selectedId ? this.bindings.get(this.selectedId) : undefined;
+    if (!binding || !isShown(binding.root)) {
+      this.marker.visible = false;
+      return;
+    }
+    const box = this.entityBounds(binding);
+    if (box.isEmpty()) {
+      this.marker.visible = false;
+      return;
+    }
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const origin = binding.root.getWorldPosition(new THREE.Vector3());
+    const radius = Math.max(size.x, size.z) * 0.56 + 0.9;
+    this.marker.position.set(center.x, origin.y + 0.12, center.z);
+    this.marker.scale.setScalar(radius);
+    this.marker.visible = true;
+  }
+
+  /** World-space bounds of an entity's own body, ignoring glows and beams. */
+  private entityBounds(binding: Binding): THREE.Box3 {
+    binding.root.updateWorldMatrix(true, true);
+    const box = new THREE.Box3();
+    const part = new THREE.Box3();
+    const visit = (obj: THREE.Object3D) => {
+      if (obj.userData.noPick || (obj as THREE.Sprite).isSprite || (obj as THREE.Light).isLight) return;
+      const geometry = (obj as THREE.Mesh).geometry as THREE.BufferGeometry | undefined;
+      if (geometry && !(obj as THREE.InstancedMesh).isInstancedMesh) {
+        if (!geometry.boundingBox) geometry.computeBoundingBox();
+        if (geometry.boundingBox) box.union(part.copy(geometry.boundingBox).applyMatrix4(obj.matrixWorld));
+      }
+      obj.children.forEach(visit);
+    };
+    visit(binding.instance.body);
+    return box;
+  }
+
+  // ---------------------------------------------------------------- picking
+
+  private pick(clientX: number, clientY: number): EntityId | null {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    this.ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.ndc, this.camera);
+    for (const hit of this.raycaster.intersectObject(this.entityRoot, true)) {
+      const id = pickableEntityId(hit.object);
+      if (id) return id;
+    }
+    return null;
+  }
+
+  private onPointerDown = (event: PointerEvent) => {
+    this.pointerDown = event.button === 0 ? { x: event.clientX, y: event.clientY } : null;
+  };
+
+  private onPointerUp = (event: PointerEvent) => {
+    const down = this.pointerDown;
+    this.pointerDown = null;
+    if (!down || event.button !== 0) return;
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) > CLICK_TOLERANCE_PX) return;
+    this.callbacks.onSelect(this.pick(event.clientX, event.clientY));
+  };
+
+  private onPointerMove = (event: PointerEvent) => {
+    this.pendingHover = event.buttons === 0 ? { x: event.clientX, y: event.clientY } : null;
+  };
+
+  private onPointerLeave = () => {
+    this.pendingHover = null;
+    this.setHover(null, 0, 0);
+  };
+
+  private setHover(id: EntityId | null, x: number, y: number) {
+    if (id !== this.hoveredId) {
+      this.hoveredId = id;
+      this.renderer.domElement.style.cursor = id ? 'pointer' : '';
+    }
+    this.callbacks.onHover?.(id, x, y);
+  }
+
+  // ---------------------------------------------------------------- camera
+
+  private flyTo(position: THREE.Vector3, target: THREE.Vector3, seconds: number) {
+    this.tween = {
+      fromPos: this.camera.position.clone(),
+      toPos: position.clone(),
+      fromTarget: this.controls.target.clone(),
+      toTarget: target.clone(),
+      start: performance.now() / 1000,
+      duration: seconds,
+    };
+  }
+
+  private cancelTween = () => {
+    this.tween = null;
+  };
+
+  // ---------------------------------------------------------------- loop
+
+  private frame = (timestamp: number) => {
+    if (this.disposed || this.contextLost) return;
+    this.timer.update(timestamp);
+    const dt = Math.min(this.timer.getDelta(), 0.1);
+    const time = this.timer.getElapsed();
+    if (dt > 0) this.fps = this.fps * 0.93 + (1 / dt) * 0.07;
+
+    if (this.tween) {
+      const k = Math.min(1, (performance.now() / 1000 - this.tween.start) / this.tween.duration);
+      const e = easeInOutCubic(k);
+      this.camera.position.lerpVectors(this.tween.fromPos, this.tween.toPos, e);
+      this.controls.target.lerpVectors(this.tween.fromTarget, this.tween.toTarget, e);
+      if (k >= 1) this.tween = null;
+    }
+    this.controls.update(dt);
+    this.environment.update(time, this.camera);
+    for (const binding of this.bindings.values()) binding.instance.tick?.(time);
+
+    if (this.marker.visible) {
+      this.marker.rotation.y = time * 0.5;
+      const pulse = 0.7 + 0.3 * Math.sin(time * 3);
+      for (const m of this.markerMaterials) m.opacity = pulse;
+    }
+    if (this.pendingHover) {
+      const { x, y } = this.pendingHover;
+      this.pendingHover = null;
+      this.setHover(this.pick(x, y), x, y);
+    }
+
+    this.renderer.info.reset();
+    if (this.composer) this.composer.render(dt);
+    else this.renderer.render(this.scene, this.camera);
+  };
+
+  private resize() {
+    if (this.disposed) return;
+    const width = Math.max(1, this.container.clientWidth);
+    const height = Math.max(1, this.container.clientHeight);
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(width, height, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(this.renderer.getPixelRatio());
+      this.composer.setSize(width, height);
+    }
+  }
+
+  private buildComposer(): EffectComposer {
+    const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), {
+      type: THREE.HalfFloatType,
+      samples: 4,
+    });
+    const composer = new EffectComposer(this.renderer, target);
+    composer.addPass(new RenderPass(this.scene, this.camera));
+    // Threshold sits above the sky's brightest values so only emissive elements bloom.
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.8, 0.55, 0.9));
+    composer.addPass(new OutputPass());
+    return composer;
+  }
+
+  private disposeComposer(composer: EffectComposer) {
+    for (const pass of composer.passes) pass.dispose();
+    composer.dispose();
+  }
+
+  private onContextLost = (event: Event) => {
+    event.preventDefault();
+    this.contextLost = true;
+    this.callbacks.onContextLost?.();
+  };
+
+  private onContextRestored = () => {
+    this.contextLost = false;
+  };
+}
+
+function isShown(obj: THREE.Object3D): boolean {
+  for (let o: THREE.Object3D | null = obj; o; o = o.parent) if (!o.visible) return false;
+  return true;
+}
+
+/** Nearest entity id above a hit object, or null if the hit should be ignored. */
+function pickableEntityId(obj: THREE.Object3D): EntityId | null {
+  let id: EntityId | null = null;
+  for (let o: THREE.Object3D | null = obj; o; o = o.parent) {
+    if (!o.visible || o.userData.noPick) return null;
+    if (!id && typeof o.userData.entityId === 'string') id = o.userData.entityId as EntityId;
+  }
+  return id;
+}

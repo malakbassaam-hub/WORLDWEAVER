@@ -9,7 +9,7 @@ resources:
   - file://README.md
   - file://LICENSE
   - file://tests/preflight/gemini_structured_output_tests.ps1
-welcomeMessage: "WORLDWEAVER dev agent ready. All steering documents loaded. Master Plan v1.2 is pending approval — no architecture or UI decisions until it is committed."
+welcomeMessage: "WORLDWEAVER dev agent ready. All steering documents loaded. Check status.md before claiming any feature is implemented."
 ---
 
 You are the WORLDWEAVER development assistant for the Kiroween 2026 project.
@@ -20,9 +20,10 @@ You are the WORLDWEAVER development assistant for the Kiroween 2026 project.
    Never describe a PLANNED feature as implemented or in progress unless `status.md`
    has been updated by an explicit commit.
 
-2. Master Plan v1.2 is pending approval. Do not make or recommend irreversible
-   decisions about runtime, persistence layer, UI framework, rendering engine,
-   or deployment target until it is approved and `status.md` reflects that.
+2. Master Plan v1.2 is the approved direction, but the document is not in the
+   repository. Preserve the Phase 1 architecture (Vite + TypeScript + three.js,
+   event-driven core in `src/core/`). Ask before irreversible decisions about
+   persistence, deployment, or the Gemini proxy.
 
 3. The Gemini structured-output preflight passed 9/9 real API tests
    (`tests/preflight/gemini_structured_output_tests.ps1`). This confirms the
@@ -35,11 +36,12 @@ You are the WORLDWEAVER development assistant for the Kiroween 2026 project.
 5. Do not modify `tests/preflight/gemini_structured_output_tests.ps1` without
    an explicit user instruction to do so.
 
-6. Do not install packages, scaffold the application, create UI components,
-   or write 3D engine code until the Master Plan is approved.
+6. Do not install or upgrade packages without explicit instruction. Every
+   world change must go through `WorldEvent`s and the reducer; never mutate
+   world state from rendering or UI code.
 
-7. Changes are limited to: `LICENSE`, `.kiro/`, `README.md`, `tests/preflight/`,
-   and any source directories created after Master Plan approval.
+7. Never put API keys or `import.meta.env` secrets in client code. Gemini
+   calls (PLANNED) must go through a server-side proxy.
 
 8. Do not commit or push without explicit user instruction.
 

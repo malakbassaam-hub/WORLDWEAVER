@@ -6,12 +6,10 @@ inclusion: always
 
 ## Status
 
-No application code has been written yet. All technical decisions below are
-constraints and conventions to apply when implementation begins. Nothing here
-represents completed work.
-
-Master Plan v1.2 is pending approval. Do not finalise rendering engine,
-persistence layer, deployment target, or UI framework before it is approved.
+Phase 1 established the client application: Vite + TypeScript + three.js (see
+`status.md`). Master Plan v1.2 is the approved direction; the document is not
+available in the repository. Persistence layer, deployment target and the
+Gemini proxy design are still undecided.
 
 ---
 
@@ -62,14 +60,17 @@ required for Arabic, mixed-language, and special-character prompts.
 
 ## Language and Runtime
 
-> PLANNED — not decided until Master Plan v1.2 is approved.
+- Client: TypeScript (strict), Vite, three.js, Vitest. No UI framework; UI is
+  plain DOM modules under `src/ui/`.
+- Commands: `npm run dev`, `npm run typecheck`, `npm test`, `npm run build`.
+- Layering: `src/core/` never imports three.js or the DOM; `src/render/` and
+  `src/ui/` observe World snapshots and change state only by dispatching
+  `WorldEvent`s through the reducer.
+- No secrets or `import.meta.env` values in client code. Gemini calls (PLANNED)
+  must go through a server-side proxy.
 
-Candidate stacks under consideration (no decision made):
-- Node.js / TypeScript
-- Python
-
-The test suite (`tests/preflight/`) is PowerShell 5.1+ using only built-in
-cmdlets. No runtime dependency on Node or Python for preflight tests.
+The preflight suite (`tests/preflight/`) is PowerShell 5.1+ using only built-in
+cmdlets and does not depend on Node.
 
 ---
 
@@ -84,16 +85,20 @@ WORLDWEAVER/
 │   │   ├── tech.md
 │   │   └── status.md
 │   └── agents/
-│       └── worldweaver-dev.md        # PLANNED - dev agent definition
+│       └── worldweaver-dev.md        # Dev agent definition
 ├── LICENSE                           # MIT 2026 Malak Bassam Abdulghani
 ├── README.md
+├── index.html, package.json, package-lock.json, tsconfig.json, vite.config.ts
+├── src/
+│   ├── core/                         # World model, reducer, store, replay (no three.js/DOM)
+│   ├── render/                       # three.js renderer and procedural archetypes
+│   ├── ui/                           # Studio shell and panels
+│   ├── worlds/                       # Deterministic world builders
+│   └── main.ts                       # Composition root
 └── tests/
     └── preflight/
         └── gemini_structured_output_tests.ps1
 ```
-
-Source directories (`src/`, `app/`, etc.) do not exist yet and must not be
-created until the Master Plan is approved and a scaffold decision is made.
 
 ---
 
@@ -111,7 +116,8 @@ created until the Master Plan is approved and a scaffold decision is made.
 
 ## Git Conventions
 
-- Branch: `main`
+- Branches: `main` (stable); phase work on feature branches such as
+  `phase1/engine-foundation`, merged only with explicit approval
 - Commit style: Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`, `test:`)
 - Do not force-push `main`.
 - Do not commit secrets, build artifacts, or generated world-state data.

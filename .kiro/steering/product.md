@@ -20,8 +20,9 @@ the system interprets that description and maintains a structured, queryable wor
 
 ## Approved Concept
 
-The following features are approved in concept. None has been implemented yet.
-Every item is marked PLANNED until a commit explicitly lands it.
+The following features are approved in concept. Phase 1 delivered the
+cinematic 3D studio foundation; the features below remain PLANNED unless
+`status.md` records them as DONE or PARTIAL.
 
 ### 1. Natural-Language World Creation and Editing — PLANNED
 
@@ -89,14 +90,15 @@ as a ledger entry so the full history remains intact.
 
 ## Master Plan
 
-Master Plan v1.2 is **pending approval**. No architectural decisions have been finalised.
-Do not make irreversible decisions about rendering engine, data persistence layer,
-deployment target, or UI framework until the Master Plan is approved and committed.
+Master Plan v1.2 is the approved project direction (Kiroween 2026, Frankenstein
+category, Luminous Night visual identity), as confirmed by the user. The
+document is not available in this repository. The client stack (Vite +
+TypeScript + three.js) was established in Phase 1. Persistence, deployment and
+the Gemini proxy design are not yet decided.
 
 ---
 
 ## Out of Scope (for Kiroween 2026 entry)
 
-- 3D engine or real-time rendering
 - Multiplayer or networked world state
 - Paid cloud services or external data stores beyond the Gemini API

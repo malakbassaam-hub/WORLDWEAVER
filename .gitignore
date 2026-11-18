@@ -28,11 +28,11 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
 .npm/
 .yarn/
+# package-lock.json is intentionally tracked (reproducible npm installs).
 
 # Build output
 dist/
