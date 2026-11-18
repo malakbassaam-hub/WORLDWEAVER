@@ -257,6 +257,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .ww-event.is-genesis { border-color: rgba(120, 140, 255, 0.35); }
 .ww-event.is-meta { color: var(--muted); border-style: dashed; }
 .ww-event.is-rejected { color: #ffb3c4; border-color: rgba(255, 107, 139, 0.35); }
+.ww-event.is-batch { border-color: rgba(155, 107, 255, 0.45); background: linear-gradient(120deg, rgba(155, 107, 255, 0.16), rgba(64, 224, 255, 0.08)), var(--glass-strong); }
 .ww-event-index { font-family: var(--mono); font-size: 10.5px; color: var(--faint); }
 .ww-event-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ww-timeline-legend { flex: none; display: flex; flex-direction: column; justify-content: center; gap: 4px; max-width: 230px; font-size: 11px; color: var(--muted); }

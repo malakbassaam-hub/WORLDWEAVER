@@ -24,7 +24,7 @@ const FORBIDDEN: ReadonlyArray<[string, RegExp]> = [
 
 describe('director safety', () => {
   it('scans the director production modules', () => {
-    expect(production.map(([p]) => p).sort()).toEqual(['./context.ts', './index.ts', './schema.ts', './translate.ts', './validate.ts']);
+    expect(production.map(([p]) => p).sort()).toEqual(['./apply.ts', './context.ts', './index.ts', './schema.ts', './translate.ts', './validate.ts']);
   });
 
   it.each(FORBIDDEN)('contains no %s', (_label, pattern) => {

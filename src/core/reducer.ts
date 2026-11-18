@@ -107,9 +107,13 @@ export function applyEvent(world: World, event: WorldEvent): ApplyResult {
 
     case 'entity/transformed': {
       return updateEntity(world, event.id, seq, event.source, (e) => {
-        const next: Transform = { ...e.components.transform, ...event.transform };
+        const current = e.components.transform;
+        const next: Transform = { ...current, ...event.transform };
         const problem = validateTransform(next);
         if (problem) return problem;
+        if (sameVec(next.position, current.position) && sameVec(next.rotation, current.rotation) && sameVec(next.scale, current.scale)) {
+          return null;
+        }
         return { ...e, components: { ...e.components, transform: next } };
       });
     }
@@ -121,6 +125,14 @@ export function applyEvent(world: World, event: WorldEvent): ApplyResult {
         const next: VisualComponent = { ...visual, ...event.patch, archetype: visual.archetype };
         const problem = validateVisual(next);
         if (problem) return problem;
+        if (
+          next.color.toLowerCase() === visual.color.toLowerCase() &&
+          next.emissive.toLowerCase() === visual.emissive.toLowerCase() &&
+          next.emissiveIntensity === visual.emissiveIntensity &&
+          next.visible === visual.visible
+        ) {
+          return null;
+        }
         return { ...e, components: { ...e.components, visual: next } };
       });
     }
@@ -170,6 +182,31 @@ function validateName(name: string): string | null {
   if (name.length === 0) return 'Name must not be empty.';
   if (name.length > NAME_MAX_LENGTH) return `Name must be at most ${NAME_MAX_LENGTH} characters.`;
   return null;
+}
+
+function sameVec(a: Vec3, b: Vec3): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
+/** Result of applying a list of events atomically. */
+export type ApplyAllResult =
+  | { readonly ok: true; readonly world: World }
+  | { readonly ok: false; readonly world: World; readonly index: number; readonly reason: string };
+
+/**
+ * Applies events in order, all or nothing. On the first rejection the
+ * ORIGINAL world is returned unchanged, with the failing index and reason.
+ */
+export function applyEvents(world: World, events: readonly WorldEvent[]): ApplyAllResult {
+  let current = world;
+  for (let index = 0; index < events.length; index++) {
+    const event = events[index];
+    if (!event) return { ok: false, world, index, reason: 'Missing event.' };
+    const result = applyEvent(current, event);
+    if (!result.ok) return { ok: false, world, index, reason: result.reason };
+    current = result.world;
+  }
+  return { ok: true, world: current };
 }
 
 function finiteVec(v: Vec3): boolean {

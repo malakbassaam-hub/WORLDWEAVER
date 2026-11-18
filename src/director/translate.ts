@@ -49,6 +49,13 @@ export interface OperationOutcome {
 export interface Translation {
   /** Deterministic key for this proposal applied to this world state. */
   readonly proposalKey: string;
+  /** `world.seq` the translation was computed against (stale-preview guard). */
+  readonly baseSeq: number;
+  /**
+   * True only if EVERY operation was accepted. Proposals are all-or-nothing:
+   * a proposal with any rejected operation cannot be applied.
+   */
+  readonly applicable: boolean;
   /** Events of accepted operations, in order. All have source 'director'. */
   readonly events: readonly WorldEvent[];
   readonly outcomes: readonly OperationOutcome[];
@@ -99,6 +106,8 @@ export function translateProposal(world: World, proposal: WorldProposal): Transl
   const accepted = outcomes.filter((o) => o.status === 'accepted').length;
   return {
     proposalKey: key,
+    baseSeq: world.seq,
+    applicable: accepted === outcomes.length && events.length > 0,
     events,
     outcomes,
     accepted,

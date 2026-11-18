@@ -1,17 +1,33 @@
-import { applyEvent, type ApplyResult } from './reducer';
-import type { EntityId, World, WorldEvent } from './types';
+import { applyEvent, applyEvents, type ApplyResult } from './reducer';
+import type { EntityId, EventSource, World, WorldEvent } from './types';
+
+/** Describes a batch: a group of events applied as one atomic, undoable step. */
+export interface BatchMeta {
+  /** Human-readable summary shown in the timeline. */
+  readonly label: string;
+  /** Every event in the batch must have this source. */
+  readonly source: EventSource;
+  /** Free-form string details (e.g. proposal key, mode, model). Never secrets or prompt text. */
+  readonly details?: Readonly<Record<string, string>>;
+}
 
 /**
  * Append-only record of everything dispatched to the store, including
- * rejected events and undo/redo operations.
+ * rejected events, batches and undo/redo operations.
  *
- * This is the foundation the Causal Ledger (PLANNED) will build on; it is not
+ * The log is the complete, replayable record of a session:
+ * `replayLog(initial, log)` reproduces the live state exactly (see replay.ts).
+ * It is the foundation the Causal Ledger (PLANNED) will build on; it is not
  * itself tamper-evident and does not yet record causal links.
  */
 export interface LogEntry {
   readonly index: number;
-  readonly kind: 'event' | 'undo' | 'redo';
+  readonly kind: 'event' | 'batch' | 'undo' | 'redo';
+  /** Set for kind 'event'. */
   readonly event: WorldEvent | null;
+  /** Set for kind 'batch' (applied or rejected). */
+  readonly events?: readonly WorldEvent[];
+  readonly meta?: BatchMeta;
   readonly ok: boolean;
   readonly reason?: string;
   /** World seq after this entry was processed. */
@@ -28,9 +44,25 @@ export interface WorldStoreOptions {
   readonly historyLimit?: number;
 }
 
+export type BatchResult =
+  | { readonly ok: true; readonly world: World }
+  | { readonly ok: false; readonly world: World; readonly reason: string; readonly index: number | null };
+
+/** Upper bound on events in one batch (a proposal adds at most 64 entities). */
+export const MAX_BATCH_EVENTS = 1000;
+
 /**
  * Holds the current world, an undo/redo snapshot history, and the event log.
  * Snapshots are cheap because the reducer shares unchanged entity objects.
+ *
+ * Sequencing rules:
+ * - `World.seq` is a monotonic state counter. Every accepted event (including
+ *   each event inside an accepted batch) and every undo/redo consumes one seq.
+ *   A batch is one undo step regardless of how many events it contains.
+ * - Undo/redo move through snapshot history; they are recorded in the log as
+ *   their own entries and never synthesise events.
+ * - Entity provenance always describes the change whose result is currently
+ *   in effect: undo restores the earlier provenance with the earlier state.
  */
 export class WorldStore {
   private present: World;
@@ -53,6 +85,10 @@ export class WorldStore {
     return this.log;
   }
 
+  getHistoryLimit(): number {
+    return this.historyLimit;
+  }
+
   canUndo(): boolean {
     return this.past.length > 0;
   }
@@ -64,12 +100,7 @@ export class WorldStore {
   dispatch(event: WorldEvent): ApplyResult {
     const before = this.present;
     const result = applyEvent(before, event);
-    if (result.ok) {
-      this.past.push(this.present);
-      if (this.past.length > this.historyLimit) this.past.shift();
-      this.future = [];
-      this.present = result.world;
-    }
+    if (result.ok) this.commit(result.world);
     this.append({
       kind: 'event',
       event,
@@ -80,6 +111,51 @@ export class WorldStore {
     });
     this.emit();
     return result;
+  }
+
+  /**
+   * Applies events as ONE atomic step: all succeed or the world is unchanged.
+   * A successful batch creates exactly one undo step and one log entry.
+   */
+  dispatchBatch(events: readonly WorldEvent[], meta: BatchMeta): BatchResult {
+    const before = this.present;
+    const reject = (reason: string, index: number | null): BatchResult => {
+      this.append({
+        kind: 'batch',
+        event: null,
+        events: [...events],
+        meta,
+        ok: false,
+        reason,
+        entityId: firstEntityId(events),
+        summary: meta.label,
+      });
+      this.emit();
+      return { ok: false, world: before, reason, index };
+    };
+
+    if (events.length === 0) return reject('A batch must contain at least one event.', null);
+    if (events.length > MAX_BATCH_EVENTS) return reject(`A batch may contain at most ${MAX_BATCH_EVENTS} events.`, null);
+    const foreign = events.findIndex((e) => e.source !== meta.source);
+    if (foreign >= 0) return reject(`Event ${foreign + 1} has source "${events[foreign]?.source}", expected "${meta.source}".`, foreign);
+
+    const result = applyEvents(before, events);
+    if (!result.ok) return reject(`Event ${result.index + 1} of ${events.length} rejected: ${result.reason}`, result.index);
+
+    // Each event keeps its own seq (provenance stamps refer to them), exactly
+    // as in a dry-run preview; the batch is still ONE undo step.
+    this.commit(result.world);
+    this.append({
+      kind: 'batch',
+      event: null,
+      events: [...events],
+      meta,
+      ok: true,
+      entityId: firstEntityId(events),
+      summary: meta.label,
+    });
+    this.emit();
+    return { ok: true, world: this.present };
   }
 
   undo(): boolean {
@@ -108,6 +184,13 @@ export class WorldStore {
     return () => this.listeners.delete(listener);
   }
 
+  private commit(next: World): void {
+    this.past.push(this.present);
+    if (this.past.length > this.historyLimit) this.past.shift();
+    this.future = [];
+    this.present = next;
+  }
+
   private append(entry: Omit<LogEntry, 'index' | 'worldSeq'>): void {
     this.log.push({ ...entry, index: this.log.length, worldSeq: this.present.seq });
   }
@@ -117,8 +200,13 @@ export class WorldStore {
   }
 }
 
-function entityIdOf(event: WorldEvent): EntityId | null {
+function entityIdOf(event: WorldEvent): EntityId {
   return event.type === 'entity/added' ? event.entity.id : event.id;
+}
+
+function firstEntityId(events: readonly WorldEvent[]): EntityId | null {
+  const first = events[0];
+  return first ? entityIdOf(first) : null;
 }
 
 export function describeEvent(event: WorldEvent, world: World): string {

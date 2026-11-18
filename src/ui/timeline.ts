@@ -40,7 +40,7 @@ export class TimelinePanel {
     const store = this.actions.store;
     this.undoBtn.disabled = !store.canUndo();
     this.redoBtn.disabled = !store.canRedo();
-    const applied = log.filter((e) => e.kind === 'event' && e.ok).length;
+    const applied = log.filter((e) => (e.kind === 'event' || e.kind === 'batch') && e.ok).length;
     this.meta.textContent = `seq #${world.seq} · ${applied} edit${applied === 1 ? '' : 's'}`;
     if (log.length === this.renderedCount) return;
     this.renderedCount = log.length;
@@ -58,8 +58,9 @@ export class TimelinePanel {
   }
 
   private chip(world: World, entry: LogEntry): HTMLElement {
-    const source = entry.event?.source;
-    const state = entry.kind !== 'event' ? ' is-meta' : entry.ok ? '' : ' is-rejected';
+    const source = entry.event?.source ?? entry.meta?.source;
+    const isChange = entry.kind === 'event' || entry.kind === 'batch';
+    const state = (!isChange ? ' is-meta' : entry.ok ? '' : ' is-rejected') + (entry.kind === 'batch' ? ' is-batch' : '');
     const target = entry.entityId && world.entities[entry.entityId] ? entry.entityId : null;
     const title = entry.ok ? entry.summary : `Rejected: ${entry.reason ?? 'unknown reason'}`;
     return h(

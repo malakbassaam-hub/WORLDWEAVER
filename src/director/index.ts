@@ -8,3 +8,4 @@ export * from './schema';
 export * from './validate';
 export * from './context';
 export * from './translate';
+export * from './apply';
