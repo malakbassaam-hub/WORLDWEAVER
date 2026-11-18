@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:live": "vitest run --config vitest.live.config.ts"
   },
   "dependencies": {
     "three": "^0.187.0"

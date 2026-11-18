@@ -16,5 +16,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["./**/*.ts", "../vite.config.ts", "../tests/live/**/*.ts"]
+  "include": ["./**/*.ts", "../vite.config.ts", "../vitest.live.config.ts", "../tests/live/**/*.ts"]
 }
