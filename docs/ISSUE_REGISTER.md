@@ -46,9 +46,15 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-017 | Phase 1 not verified against Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (document) |
 | WW-018 | Phase 1.5 visual improvement list not available | Medium | Malak | 2026-11-24 | BLOCKED (list) |
 | WW-019 | Citadel close-up glow washes out detail | Low | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
-| WW-020 | Kilo Code worktree is on the pre-Phase-1 commit | High | Kilo Code | 2026-11-19 | OPEN |
+| WW-020 | Kilo Code worktree is on the pre-Phase-1 commit | High | Kilo Code | 2026-11-19 | IN PROGRESS |
+| WW-021 | Phase 2 start and proxy runtime not approved | Critical | Malak | 2026-11-19 | BLOCKED (decision) |
+| WW-022 | Submission and deployment format undecided | High | Malak | 2026-11-24 | BLOCKED (decision) |
+| WW-023 | Flagship feature requirements need Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (WW-017) |
+| WW-024 | Preflight script sends the API key in the URL query | Medium | Kiro | 2026-11-21 | OPEN |
+| WW-025 | Gemini output schema v2 not tested against the live model | Medium | Kiro | 2026-11-21 | OPEN |
+| WW-026 | Gemini quota and availability risk for the live demo | Medium | Kiro | 2026-11-25 | OPEN |
 
-**Totals:** 20 issues. High 4, Medium 10, Low 6. OPEN 11, BLOCKED 9, IN PROGRESS 0, DONE 0.
+**Totals:** 26 issues. Critical 1, High 6, Medium 13, Low 6. OPEN 13, BLOCKED 12, IN PROGRESS 1, DONE 0.
 
 ---
 
@@ -519,7 +525,7 @@ above 180. Crystal facets merge into glow.
 | Severity | High |
 | Owner | Kilo Code |
 | Target | 2026-11-19 |
-| Status | OPEN |
+| Status | IN PROGRESS |
 
 **Description.** `git worktree list` shows Kilo Code's worktree at
 `C:/Users/user/.local/share/kilo/worktree-pool/worldweaver-9cd03c12d04e/capricious-mars`
@@ -533,8 +539,154 @@ Kiro has not modified that worktree.
 - Kilo's changes reach Phase 1 code only through a reviewed merge or pull request, never by pushing to `main`.
 
 **Verification evidence.**
-- Current: `git worktree list` output on 2026-11-18.
-- To close: `git worktree list` and `git log -1` from the Kilo worktree, plus passing checks.
+- Current (2026-11-18, first listing): only the `capricious-mars` worktree at `1e03dff`.
+- Current (2026-11-18, later listing): a new worktree `C:/Users/user/WORLDWEAVER-WEBGL` on branch `phase1.5/webgl-recovery` at `3459f26` (Phase 1). The branch is not on `origin` yet. The `capricious-mars` worktree still exists. Kiro has not run any command inside either worktree, so install, test, type-check and build results there are unverified.
+- To close: Kilo Code reports `git log -1` plus passing `npm test`, `npm run typecheck` and `npm run build` from `WORLDWEAVER-WEBGL`. WW-001 to WW-004, WW-014 and WW-019 then change from BLOCKED to OPEN.
+
+### WW-021 — Phase 2 start and proxy runtime not approved
+
+| Field | Value |
+|---|---|
+| Severity | Critical |
+| Owner | Malak |
+| Target | 2026-11-19 |
+| Status | BLOCKED — awaiting decision |
+
+**Description.** Gemini world creation, Phase 2, is the first item on the
+critical path to the 2026-12-03 target. It needs three approvals before
+implementation begins. First, permission to start Phase 2. Second, a
+server-side component: a static Vite build cannot keep the API key secret. The
+proposed runtime is Node 24, which the project already requires, with Vite dev
+middleware and no new dependency. Third, a labelled fixture mode that serves
+recorded responses for tests and as a demo fallback. See
+[PHASE2_PLAN.md](PHASE2_PLAN.md) step P2-00.
+
+**Acceptance criteria.**
+- Malak's decisions on all three points are recorded in `.kiro/steering/tech.md`.
+- If the runtime differs from the proposal, `PHASE2_PLAN.md` and the schedule are updated the same day.
+
+**Verification evidence.**
+- Current: plan written; no decision recorded.
+- To close: commit containing the recorded decision.
+
+### WW-022 — Submission and deployment format undecided
+
+| Field | Value |
+|---|---|
+| Severity | High |
+| Owner | Malak |
+| Target | 2026-11-24 |
+| Status | BLOCKED — awaiting decision |
+
+**Description.** It is not decided whether the submission is a hosted demo, a
+locally run app, a video, or a combination. A hosted demo needs a hosted proxy
+that holds the API key, so a static host alone cannot hide it. A local demo
+needs clear run instructions, and each user supplies their own key. This
+affects proxy hosting, README instructions and the final test plan.
+
+**Acceptance criteria.**
+- The submission format is recorded in `.kiro/steering/tech.md`.
+- If hosted: the hosting target keeps the key server-side and uses no paid services unless Malak explicitly approves them.
+- The README run instructions match the chosen format.
+
+**Verification evidence.**
+- Current: none.
+- To close: the recorded decision, plus updated README instructions.
+
+### WW-023 — Flagship feature requirements need Master Plan v1.2
+
+| Field | Value |
+|---|---|
+| Severity | High |
+| Owner | Malak (supply); Kiro (requirements and conformance) |
+| Target | 2026-11-24 |
+| Status | BLOCKED by WW-017 |
+
+**Description.** World Morph, Living Characters, Parallel Futures and the
+Causal Ledger are defined only by the short summaries in
+`.kiro/steering/product.md`. `PHASE2_PLAN.md` section 10 gives provisional
+scope derived from those summaries. The detailed requirements, the depth
+expected for the submission, and conformance checks depend on Master Plan v1.2,
+which has not been supplied. They must not be assumed.
+
+**Acceptance criteria.**
+- When Master Plan v1.2 is supplied, each flagship feature has requirements and acceptance criteria traced to the document.
+- Every difference from the provisional scope becomes a register issue, and the schedule is updated.
+- Until then, provisional work is labelled provisional in `status.md`.
+
+**Verification evidence.**
+- Current: provisional scope in `PHASE2_PLAN.md` section 10; Master Plan not available.
+- To close: traced requirements document, plus register updates.
+
+### WW-024 — Preflight script sends the API key in the URL query
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Kiro (change requires Malak's explicit approval) |
+| Target | 2026-11-21 |
+| Status | OPEN |
+
+**Description.** `tests/preflight/gemini_structured_output_tests.ps1:104`
+builds the request URL as `...:generateContent?key=<GEMINI_API_KEY>`. Keys in
+URLs can appear in exception messages, proxy logs or shell history. The script
+does not print the key, and runs only locally. Steering rules forbid changing
+this script without explicit instruction. The Phase 2 proxy and the new v2
+preflight script must use the `x-goog-api-key` header instead.
+
+**Acceptance criteria.**
+- New Phase 2 code and the v2 preflight script send the key only in the `x-goog-api-key` header (code review plus proxy unit test).
+- With Malak's approval, the existing preflight script is switched to the header, and a no-key dry run plus a syntax check still pass. Otherwise a dated risk acceptance is recorded here.
+
+**Verification evidence.**
+- Current: line 104 of the preflight script uses the query parameter.
+- To close: header-only key usage in new code, plus either the updated script or the recorded acceptance.
+
+### WW-025 — Gemini output schema v2 not tested against the live model
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Kiro (script); Malak (live run) |
+| Target | 2026-11-21 |
+| Status | OPEN |
+
+**Description.** The 9/9 live preflight covered only the v1 schema
+(`worldName`, `biome`, `objects[{name,type}]`). Phase 2 needs a v2 schema with
+operations, enums, refs and placement intents (`PHASE2_PLAN.md` section 4.1).
+Gemini's handling of v2 has never been tested.
+
+**Acceptance criteria.**
+- New script `tests/preflight/gemini_schema_v2_tests.ps1`: at most 9 calls, at least 5 s apart, no automatic retries, key from the environment sent in a header, never printed. The existing script is untouched.
+- Covers create, edit with refs, Arabic, mixed Arabic and English, pinned context, oversized request and an adversarial prompt.
+- A no-key dry run and a syntax check pass. Malak runs it live and the results are recorded in `status.md`.
+
+**Verification evidence.**
+- Current: none. v2 schema exists only in the plan.
+- To close: script committed, dry-run output, and live results.
+
+### WW-026 — Gemini quota and availability risk for the live demo
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Kiro |
+| Target | 2026-11-25 |
+| Status | OPEN |
+
+**Description.** Phase 2 depends on Gemini at demo time. Free-tier rate limits
+and quota exhaustion (HTTP 429) or upstream outages would break a live
+demonstration. Automatic retries are prohibited, and paid services must not be
+enabled without approval.
+
+**Acceptance criteria.**
+- 429 and timeout states are clear to the user, with retry-after countdowns (`PHASE2_PLAN.md` section 8).
+- Fixture mode serves recorded proposals behind a visible "Recorded responses" badge. It is used for E2E tests and as a demo fallback, and is never presented as live AI.
+- The quota available to the project is recorded by Malak.
+
+**Verification evidence.**
+- Current: none.
+- To close: browser tests of the 429 and timeout states in fixture mode, a screenshot of the badge, and the recorded quota.
 
 ---
 
@@ -543,3 +695,4 @@ Kiro has not modified that worktree.
 | Date | Change |
 |---|---|
 | 2026-11-18 | Register created from the Phase 1 review: WW-001 to WW-020. |
+| 2026-11-18 | Phase 2 readiness: added WW-021 to WW-026. WW-020 moved to IN PROGRESS (new `WORLDWEAVER-WEBGL` worktree on Phase 1 code observed; checks unverified). No existing target dates changed. |
