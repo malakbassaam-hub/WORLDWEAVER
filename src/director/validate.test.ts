@@ -215,9 +215,15 @@ describe('validateProposal: size limits and hostile input', () => {
     expectIssue({ summary: 'x', operations: ops }, 'operations', 'too_many');
   });
 
-  it('limits the total entities added by one proposal', () => {
-    const ops = Array.from({ length: 9 }, () => ({ op: 'add', archetype: 'crystalSpire', name: 'X', placement: 'sky', count: 8 }));
-    expectIssue({ summary: 'x', operations: ops }, 'operations', 'too_many');
+  it('limits the total entities added by one proposal, exactly at the boundary', () => {
+    const per = PROPOSAL_LIMITS.maxAddCount;
+    const opsFor = (total: number) => {
+      const ops: Array<Record<string, unknown>> = [];
+      for (let left = total; left > 0; left -= per) ops.push({ op: 'add', archetype: 'crystalSpire', name: 'X', placement: 'sky', count: Math.min(per, left) });
+      return { summary: 'x', operations: ops };
+    };
+    expect(validateProposal(opsFor(PROPOSAL_LIMITS.maxAddedPerProposal)).ok).toBe(true);
+    expectIssue(opsFor(PROPOSAL_LIMITS.maxAddedPerProposal + 1), 'operations', 'too_many');
   });
 
   it('limits summary length', () => {
