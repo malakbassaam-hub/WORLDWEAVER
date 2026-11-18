@@ -83,7 +83,14 @@ function boot(host: HTMLElement) {
       {
         onSelect: (id) => actions.select(id),
         onHover: (id, x, y) => shell.showTooltip(id ? (store.getState().entities[id]?.name ?? null) : null, x, y),
-        onContextLost: () => shell.showFallback('The 3D context was lost', 'The GPU reset or ran out of memory. Reload the page to restore the viewport.'),
+        onContextLost: () => shell.showFallback('The 3D context was lost', 'The GPU reset or ran out of memory. The viewport will restore automatically.'),
+        onContextRestored: () => {
+          if (!renderer) return;
+          renderer.sync(store.getState());
+          renderer.setSelection(selection.get());
+          shell.hideFallback(renderer.domElement);
+          shell.setQualityLabel(renderer.getQuality());
+        },
       },
       genesis.seed,
     );

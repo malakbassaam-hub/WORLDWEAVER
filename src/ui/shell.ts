@@ -126,4 +126,9 @@ export class StudioShell {
     );
     this.ready();
   }
+
+  /** Restores the canvas to the viewport and removes the context-loss fallback. */
+  hideFallback(canvas: HTMLCanvasElement): void {
+    this.viewport.replaceChildren(canvas);
+  }
 }
