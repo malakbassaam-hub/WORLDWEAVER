@@ -24,6 +24,45 @@ undecided.
   then deterministic translation to `WorldEvent`s (`src/director/translate.ts`).
   It is never evaluated as code.
 
+### Director proxy (as built)
+
+- `server/director/` is a plain Node.js 24 HTTP handler, mounted at
+  `/api/director` in `npm run dev` and `npm run preview` by `directorPlugin()`
+  (`vite.config.ts`). `createDirectorServer()` runs it standalone on 127.0.0.1.
+- Environment: `GEMINI_API_KEY` (server only), `DIRECTOR_MODE` (`live` or
+  `recorded`; default live if a key is set), `GEMINI_MODEL`,
+  `DIRECTOR_TIMEOUT_MS`, `DIRECTOR_MIN_INTERVAL_MS` (at least 5000) and
+  `DIRECTOR_RECORDED_LATENCY_MS`.
+- Controls: localhost Host, same-origin Origin and `Sec-Fetch-Site`; JSON
+  only; 64 KB body; strict request schema; one running request (a newer one
+  supersedes it with 409); at least 5 s between live calls; 30 s timeout; no
+  automatic retries; key only in the `x-goog-api-key` header; logs contain no
+  key and no prompt text; model output validated on the server and again in
+  the browser.
+- Browser code may call only `/api/director` and `/api/director/health`
+  (enforced by `src/director/safety.test.ts`).
+
+### Sequencing, undo and replay (WW-007 decision, 2026-11-18)
+
+- `World.seq` is a monotonic state counter. Each accepted event, including
+  each event inside a batch, and each undo or redo consumes one seq.
+- `WorldStore.dispatchBatch()` applies a list of events atomically. It is one
+  undo step and one `batch` log entry. Every event must have the batch's
+  source.
+- The store log (events, batches, undo, redo, rejections) is the complete,
+  replayable record. `replayLog()` reproduces the live state exactly and
+  never calls Gemini.
+- Entity provenance describes the state currently in effect: undo restores
+  the earlier provenance together with the earlier state.
+- Visual and transform patches that change nothing are rejected with
+  "No change." (WW-027). The UI does not dispatch such no-ops at all.
+
+### Test commands
+
+`npm test` (unit, no network); `npm run test:e2e` (Playwright, installed
+Chrome, recorded mode); `npm run test:live` (opt-in, live Gemini, at most 9
+calls). Do not run browser suites at the same time as another agent's (WW-029).
+
 ---
 
 ## AI Integration

@@ -4,7 +4,7 @@ inclusion: always
 
 # WORLDWEAVER — Implementation Status
 
-Last updated: Phase 1 checkpoint (branch `phase1/engine-foundation`).
+Last updated: 2026-11-18, Phase 2 Director implementation (branch `phase2/director`).
 
 This document is the single source of truth for what has and has not been
 completed. Status values:
@@ -35,6 +35,32 @@ Phase 1 against the document when it becomes available.
 | `.kiro/steering/` + `.kiro/agents/worldweaver-dev.md` | DONE | |
 | Gemini preflight test script | DONE | `tests/preflight/gemini_structured_output_tests.ps1` |
 | Phase 1 application (Vite + TypeScript + three.js) | DONE | Branch `phase1/engine-foundation`; not merged into `main` |
+| Phase 2 AI World Director | DONE except live verification | Branch `phase2/director` (from `3be7356`); not merged |
+
+---
+
+## Phase 2 — AI World Director (2026-11-18)
+
+**Live Gemini compatibility is NOT verified.** No API key was available to the
+agent. Everything below was verified in recorded mode and with mocked
+upstream responses.
+
+| Area | Status | Location | Evidence |
+|---|---|---|---|
+| Proposal schema v2, strict validator, deterministic translator | DONE | `src/director/schema.ts`, `validate.ts`, `context.ts`, `translate.ts` | Unit tests; mutation checks caught by tests |
+| Atomic proposal application (one undo step, all-or-nothing) | DONE | `WorldStore.dispatchBatch`, `src/director/apply.ts` | `src/core/batch.test.ts`, `src/director/apply.test.ts`; browser "create … one undo step" |
+| Log replay, undo/redo semantics (WW-007) | DONE | `replayLog()` in `src/core/replay.ts` | `batch.test.ts` replay tests |
+| Reducer and UI no-op rule (WW-027) | DONE | `src/core/reducer.ts`, `src/main.ts` | Unit tests plus browser test |
+| Node.js 24 Director proxy, LIVE and RECORDED modes | DONE (live path tested with mocks only) | `server/director/` | 53 proxy tests over real HTTP; 13 recording tests |
+| Director UI (prompt, preview, Apply, Discard, cancel, retry, errors, mode badge) | DONE | `src/ui/director.ts`, `src/director/controller.ts`, `client.ts`, `describe.ts` | 23 controller tests; browser suite |
+| Browser acceptance suite (WW-010, WW-011) | DONE | `tests/e2e/director.spec.ts` | 3 consecutive 12/12 runs on `f8339e6`; 13/13 on `9c7d406` |
+| Live compatibility suite (WW-025) | Written; **BLOCKED** | `tests/live/director.live.test.ts` | Run without a key: BLOCKED, 0 calls |
+| Live smoke in the app (P2-08) | **BLOCKED** | — | Needs Malak's key |
+
+Test totals at `9c7d406`: 225 unit tests passed, 0 failed, 0 skipped; 13
+browser tests passed; live suite 1 passed (the BLOCKED report) and 9 skipped
+(no key). Production build clean; the bundle contains no key values, no auth
+header name and no Gemini URL. `npm audit`: 0 vulnerabilities.
 
 ---
 
@@ -148,8 +174,8 @@ OS-locale digits (switched to text inputs); removed three.js
 
 | Feature | Status | What exists today |
 |---|---|---|
-| Natural-language world creation (Gemini) | PARTIAL | On `phase2/director`: proposal schema v2, strict validation, world context and deterministic translation to `WorldEvent`s, unit tested. No proxy, no UI, no live Gemini calls yet. The AI Director panel is still a disabled placeholder. |
-| Natural-language world editing | PLANNED | Manual inspector edits only |
+| Natural-language world creation (Gemini) | PARTIAL | Fully implemented on `phase2/director` (proxy, validation, review, atomic apply) and verified in RECORDED mode. **Live Gemini output not yet verified** (WW-025, P2-08). |
+| Natural-language world editing | PARTIAL | Director Edit mode (rename, recolour, glow, move, show/hide, remove by ref), verified in RECORDED mode; live not verified |
 | World Morph | PLANNED | `WorldMorph` interface only |
 | Pinned objects | PARTIAL | Pin flag on entities; pinned entities cannot be removed. Morph preservation PLANNED. |
 | Living Characters with persistent memory | PLANNED | `CharacterMemoryStore` interface only |
@@ -157,8 +183,8 @@ OS-locale digits (switched to text inputs); removed three.js
 | Causal Ledger | PLANNED | Session event log is a foundation; not tamper-evident, no causal links, not persisted |
 | Provenance | PARTIAL | Per-entity created-by / last-modified-by + seq stamps. Full provenance chains and explanations PLANNED. |
 | Safety layer | PLANNED | Reducer input validation only; no content policy |
-| Deterministic replay | PARTIAL | Pure reducer + `replay()` with tests. No replay UI or persisted logs. |
-| Undo / redo | PARTIAL | Session snapshot undo/redo. Ledger-backed and targeted undo PLANNED. |
+| Deterministic replay | PARTIAL | `replay()` and `replayLog()` (events, Director batches, undo, redo) reproduce live state exactly, with tests; never calls Gemini. No replay UI or persisted logs. |
+| Undo / redo | PARTIAL | Session snapshot undo/redo; a Director proposal is one undo step. Ledger-backed and targeted undo PLANNED. |
 | World state persistence | PLANNED | |
 | Cinematic interactive 3D + studio editing | DONE (Phase 1 scope) | See Phase 1 above |
 | Physics / simulation | PLANNED | `SimulationSystem` interface only |

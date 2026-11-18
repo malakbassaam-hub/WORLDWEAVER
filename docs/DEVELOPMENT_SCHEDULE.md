@@ -28,6 +28,17 @@ status with evidence. Phase 2 details: [PHASE2_PLAN.md](PHASE2_PLAN.md).
 | 2026-11-18 | Issue register and first schedule | Commit `23e676e` |
 | 2026-11-18 | Phase 2 plan, register update and this schedule | Commit `3be7356` |
 | 2026-11-18 | Phase 2 approved (WW-021); P2-01 schema and validator and P2-03 translator implemented ahead of their 2026-11-20 and 2026-11-21 targets | Branch `phase2/director` |
+| 2026-11-18 | P2-04 atomic batches and log replay (WW-007, WW-027), P2-05 proxy with live and recorded modes, P2-06 active Director panel, P2-07 browser acceptance suite (WW-010, WW-011), P2-02 live suite written, all ahead of target. **P2-08 live smoke and the live run of P2-02 are BLOCKED** until Malak runs them with her key. | Commits `95c62cf` to `9c7d406` on `phase2/director` |
+
+## Status update (2026-11-18)
+
+Phase 2 implementation finished about five days ahead of the 2026-11-23 to
+2026-11-25 targets, except live Gemini verification (WW-025, P2-08), which
+needs Malak's key. The dates below are unchanged: they remain targets. Freed
+time should go first to the flagship features on the critical path (World
+Morph, Causal Ledger, Parallel Futures, Living Characters). Any move to
+earlier dates should be agreed with Malak and recorded in the register's
+change log.
 
 ## Schedule
 
@@ -52,6 +63,7 @@ register issues, whose target dates are unchanged from the previous schedule.
 | 2026-11-24 | Malak | Supply Master Plan v1.2 and the Phase 1.5 visual list; decide the submission and deployment format | WW-017, WW-018, WW-022, WW-023 | — |
 | 2026-11-25 | Kiro | Phase 2 browser acceptance in fixture mode; quota-safe states and "Recorded responses" badge; Phase 2 checkpoint branch and pull request | P2-07, P2-09, WW-026 | P2-06, WW-010 |
 | 2026-11-25 | Malak, Kiro | Live smoke test with the real key; **flagship depth decision** (how deep each feature goes by 2026-12-03; no feature removed) | P2-08 | P2-06 |
+| 2026-11-25 | Kiro, Kilo Code | Agree a rule so browser suites do not run at the same time; optional fast smoke subset | WW-029 | — |
 | 2026-11-26 | Kiro | World Morph with pinned-object enforcement on the Phase 2 pipeline (provisional scope) | WM | P2-09 |
 | 2026-11-26 | Kiro | Responsive and reduced-motion verification at five viewport sizes | WW-015 | — |
 | 2026-11-26 | Kilo Code | Reduce draw calls; tune citadel close-up glow; optional Morph transition effect | WW-014, WW-019, WM | WW-020 |
@@ -67,6 +79,7 @@ register issues, whose target dates are unchanged from the previous schedule.
 | 2026-11-30 | Kiro | Living Characters: memory store and talk flow, part 1 (provisional scope); split the bundle; re-review the picomatch advisory | LC, WW-013, WW-012 | WW-016, P2-05 |
 | 2026-12-01 | Kiro | Living Characters, part 2; final integration scenario (create → edit → pin → morph → fork → talk → explain → undo → reload) | LC, INT | All features |
 | 2026-12-01 | Kiro, Malak | Full regression: E2E suite, console health, real-GPU recheck, responsive recheck | INT, WW-009, WW-010, WW-011, WW-015 | INT scenario |
+| 2026-12-01 | Kiro | Make the Vite config native-loader compatible (or pin the bundler loader) | WW-028 | — |
 | 2026-12-02 | Kiro | Master Plan conformance review of all flagship features | WW-023 | **BLOCKED until WW-017 is resolved** |
 | 2026-12-02 | Malak, Kiro | Feature freeze; update `status.md` and README; decide whether to merge into `main` | INT | Regression results |
 | 2026-12-03 | Malak | Submission preparation target | — | Freeze |

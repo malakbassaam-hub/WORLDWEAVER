@@ -33,12 +33,12 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-004 | No renderer regression tests | Medium | Kilo Code | 2026-11-24 | BLOCKED (WW-020) |
 | WW-005 | Visual preview can leak into the viewport | Medium | Kiro | 2026-11-20 | OPEN |
 | WW-006 | Rejected events trigger full redundant re-renders | Low | Kiro | 2026-11-20 | OPEN |
-| WW-007 | Undo/redo sequence semantics are undefined for replay and provenance | Medium | Kiro | 2026-11-24 | OPEN |
+| WW-007 | Undo/redo sequence semantics are undefined for replay and provenance | Medium | Kiro | 2026-11-24 | DONE |
 | WW-008 | Entity names truncated in the hierarchy | Low | Kiro | 2026-11-22 | OPEN |
 | WW-009 | Performance on real GPU hardware not tested | Medium | Malak | 2026-11-26 | OPEN |
-| WW-010 | Browser end-to-end tests not committed | Medium | Kiro | 2026-11-24 | OPEN |
-| WW-011 | Console and shadow-warning check not re-run after fix | Low | Kiro | 2026-11-20 | OPEN |
-| WW-012 | Development-only picomatch advisory | Low | Kiro | 2026-11-30 | OPEN |
+| WW-010 | Browser end-to-end tests not committed | Medium | Kiro | 2026-11-24 | DONE |
+| WW-011 | Console and shadow-warning check not re-run after fix | Low | Kiro | 2026-11-20 | DONE |
+| WW-012 | Development-only picomatch advisory | Low | Kiro | 2026-11-30 | DONE |
 | WW-013 | Bundle is a single 664 kB chunk | Low | Kiro | 2026-11-30 | OPEN |
 | WW-014 | Draw-call count is high | Medium | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
 | WW-015 | Responsive layouts not verified | Medium | Kiro | 2026-11-26 | OPEN |
@@ -51,11 +51,13 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-022 | Submission and deployment format undecided | High | Malak | 2026-11-24 | BLOCKED (decision) |
 | WW-023 | Flagship feature requirements need Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (WW-017) |
 | WW-024 | Preflight script sends the API key in the URL query | Medium | Kiro | 2026-11-21 | OPEN |
-| WW-025 | Gemini output schema v2 not tested against the live model | Medium | Kiro | 2026-11-21 | OPEN |
-| WW-026 | Gemini quota and availability risk for the live demo | Medium | Kiro | 2026-11-25 | OPEN |
-| WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | OPEN |
+| WW-025 | Gemini output schema v2 not tested against the live model | Medium | Kiro | 2026-11-21 | BLOCKED (live key) |
+| WW-026 | Gemini quota and availability risk for the live demo | Medium | Kiro | 2026-11-25 | IN PROGRESS |
+| WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | DONE |
+| WW-028 | Vite config loader warns about extensionless imports | Low | Kiro | 2026-12-01 | OPEN |
+| WW-029 | Browser suite is slow and contends with other agents on a shared machine | Low | Kiro | 2026-11-25 | OPEN |
 
-**Totals:** 27 issues. Critical 1, High 6, Medium 13, Low 7. OPEN 14, BLOCKED 11, IN PROGRESS 1, DONE 1.
+**Totals:** 29 issues. Critical 1, High 6, Medium 13, Low 9. OPEN 9, BLOCKED 12, IN PROGRESS 2, DONE 6.
 
 ---
 
@@ -221,7 +223,7 @@ changed. The inspector rebuild also discards in-progress typed input and focus.
 | Severity | Medium |
 | Owner | Kiro |
 | Target | 2026-11-24 |
-| Status | OPEN |
+| Status | DONE (2026-11-18) |
 
 **Description.** Undo and redo restore a snapshot and set
 `seq = present.seq + 1` (`store.ts:90`, `:100`). No event exists for that seq.
@@ -239,6 +241,7 @@ Causal Ledger and deterministic replay need these rules defined first.
 **Verification evidence.**
 - Current: `store.test.ts` covers undo/redo state but not replay through undo.
 - To close: new replay-through-undo tests passing, plus the recorded decision.
+- Verified (2026-11-18): decision recorded in `src/core/store.ts` (sequencing rules) and `.kiro/steering/tech.md`. The store log is the complete replayable record: `replayLog()` (`src/core/replay.ts`) re-executes events, batches, undo and redo and reproduces the live state exactly, including seq. Provenance after undo is the provenance of the restored state. Passing tests in `src/core/batch.test.ts`: "reproduces the live state exactly through events, batches, rejections, undo and redo" and "keeps provenance consistent with the state in effect after undo". Commit `95c62cf`.
 
 ### WW-008 — Entity names truncated in the hierarchy
 
@@ -293,7 +296,7 @@ Performance mode.
 | Severity | Medium |
 | Owner | Kiro |
 | Target | 2026-11-24 |
-| Status | OPEN |
+| Status | DONE (2026-11-18) |
 
 **Description.** Phase 1 browser verification (18 checks) ran from a temporary
 DevTools-protocol driver in `%TEMP%`, outside the repository. It is not
@@ -309,6 +312,7 @@ headless frame stalls that hung screenshot capture.
 **Verification evidence.**
 - Current: 18 checks passed through the temporary driver (recorded in `status.md`).
 - To close: committed suite, plus output of three consecutive passing runs.
+- Verified (2026-11-18): Playwright suite `tests/e2e/director.spec.ts`, run with `npm run test:e2e` (`@playwright/test` 1.65.1, Apache-2.0, dev dependency approved in the Phase 2 instruction; uses the installed Chrome, no browser download). Three consecutive passing runs on commit `f8339e6`, 12/12 each (6.7, 7.2 and 8.1 min). One further run on `9c7d406`: 13/13 (4.9 min). Covers app start and render, viewport and hierarchy selection, inspector edit, undo/redo, Director create/discard/cancel/duplicate/keyboard/pinned/stale/errors, responsive layout and console health.
 
 ### WW-011 — Console and shadow-warning check not re-run after fix
 
@@ -317,7 +321,7 @@ headless frame stalls that hung screenshot capture.
 | Severity | Low |
 | Owner | Kiro |
 | Target | 2026-11-20 |
-| Status | OPEN |
+| Status | DONE (2026-11-18) |
 
 **Description.** The full console-health check (0 errors) passed before
 `PCFSoftShadowMap` was replaced with `PCFShadowMap`. The later runs ended before
@@ -330,6 +334,7 @@ unconfirmed.
 **Verification evidence.**
 - Current: earlier run reported 0 errors and 5 warnings, including the `PCFSoftShadowMap` deprecation.
 - To close: console log from a full run on the current code.
+- Verified (2026-11-18): browser test "loads the Crystal Kingdom with a clearly labelled RECORDED Director and a clean console" asserts 0 console errors, 0 page errors and no `PCFSoftShadowMap`, `THREE.`, shader or program warnings. It passed in all three consecutive runs on `f8339e6` and on `9c7d406`.
 
 ### WW-012 — Development-only picomatch advisory
 
@@ -338,7 +343,7 @@ unconfirmed.
 | Severity | Low |
 | Owner | Kiro |
 | Target | 2026-11-30 |
-| Status | OPEN |
+| Status | DONE (2026-11-18) |
 
 **Description.** `npm audit` reports picomatch ReDoS (GHSA-fc5q-39xc-vjpf)
 through `vite`, `vitest`, `tinyglobby` and `fdir`. These are development tools
@@ -353,6 +358,7 @@ downgrades Vitest from 5.1.1 to 3.1.4, a breaking change, so it was not applied.
 **Verification evidence.**
 - Current: `npm audit --omit=dev` reports 0. Full audit reports 5 high findings, all from the single picomatch advisory.
 - To close: audit output on the target date, plus either the upgrade or the recorded risk acceptance.
+- Verified (2026-11-18): `npm audit` and `npm audit --omit=dev` at `f8339e6` both report 0 vulnerabilities. `picomatch` is still 4.0.7 and the lockfile entry is unchanged since `a850253`; the registry no longer reports GHSA-fc5q-39xc-vjpf against it. No upgrade was applied. The 2026-11-30 re-check stays in the schedule.
 
 ### WW-013 — Bundle is a single 664 kB chunk
 
@@ -423,6 +429,7 @@ have never been looked at.
 **Verification evidence.**
 - Current: 1600×900 screenshots; canvas resize check at 1200×760.
 - To close: the five screenshots listed above, reviewed, plus a reduced-motion check.
+- Partial (2026-11-18): the browser suite found and fixed two narrow-layout defects: a 794 px-wide layout on a 390 px screen (single `1fr` grid column plus a non-wrapping title card) and stacked panels overlapping. The responsive test at 390×844 now asserts every panel fits, no horizontal overflow and no overlap; 1600×900 is covered by the other tests. Still to do: 1920×1080, 1366×768, 1180×800, 860×800 and the reduced-motion check. Target 2026-11-26 unchanged.
 
 ### WW-016 — World state is in memory only
 
@@ -543,6 +550,7 @@ Kiro has not modified that worktree.
 - Current (2026-11-18, first listing): only the `capricious-mars` worktree at `1e03dff`.
 - Current (2026-11-18, later listing): a new worktree `C:/Users/user/WORLDWEAVER-WEBGL` on branch `phase1.5/webgl-recovery` at `3459f26` (Phase 1). The branch is not on `origin` yet. The `capricious-mars` worktree still exists. Kiro has not run any command inside either worktree, so install, test, type-check and build results there are unverified.
 - To close: Kilo Code reports `git log -1` plus passing `npm test`, `npm run typecheck` and `npm run build` from `WORLDWEAVER-WEBGL`. WW-001 to WW-004, WW-014 and WW-019 then change from BLOCKED to OPEN.
+- Current (2026-11-18, Phase 2 session): `WORLDWEAVER-WEBGL` is at `c582edf` on `phase1.5/webgl-recovery`. Kilo Code ran its own Playwright suite there (observed processes, read-only). Its results have not been reported to Kiro, so the acceptance checks remain unverified.
 
 ### WW-021 — Phase 2 start and proxy runtime not approved
 
@@ -642,6 +650,7 @@ preflight script must use the `x-goog-api-key` header instead.
 **Verification evidence.**
 - Current: line 104 of the preflight script uses the query parameter.
 - To close: header-only key usage in new code, plus either the updated script or the recorded acceptance.
+- Partial (2026-11-18): all new Phase 2 code sends the key only in the `x-goog-api-key` header (`server/director/gemini.ts`). Proxy test "sends the key only in the x-goog-api-key header" asserts the upstream URL contains no key. The existing preflight script is unchanged and still needs Malak's approval to edit. Target 2026-11-21 unchanged.
 
 ### WW-025 — Gemini output schema v2 not tested against the live model
 
@@ -650,7 +659,7 @@ preflight script must use the `x-goog-api-key` header instead.
 | Severity | Medium |
 | Owner | Kiro (script); Malak (live run) |
 | Target | 2026-11-21 |
-| Status | OPEN |
+| Status | BLOCKED — needs a live run with Malak's key |
 
 **Description.** The 9/9 live preflight covered only the v1 schema
 (`worldName`, `biome`, `objects[{name,type}]`). Phase 2 needs a v2 schema with
@@ -665,6 +674,7 @@ Gemini's handling of v2 has never been tested.
 **Verification evidence.**
 - Current: none. v2 schema exists only in the plan.
 - To close: script committed, dry-run output, and live results.
+- Partial (2026-11-18): instead of the planned PowerShell script, the live suite is TypeScript, `tests/live/director.live.test.ts` (`npm run test:live`), so it exercises the real proxy, validator and translator: 8 live calls (cap 9), at least 5.3 s apart, no retries, key in the header only. Run without a key: BLOCKED, 0 calls, recorded in `test-results/live-gemini.json`. It has not run live because no key is available to the agent. **Live compatibility is not claimed.** Target 2026-11-21 unchanged.
 
 ### WW-026 — Gemini quota and availability risk for the live demo
 
@@ -673,7 +683,7 @@ Gemini's handling of v2 has never been tested.
 | Severity | Medium |
 | Owner | Kiro |
 | Target | 2026-11-25 |
-| Status | OPEN |
+| Status | IN PROGRESS |
 
 **Description.** Phase 2 depends on Gemini at demo time. Free-tier rate limits
 and quota exhaustion (HTTP 429) or upstream outages would break a live
@@ -688,6 +698,7 @@ enabled without approval.
 **Verification evidence.**
 - Current: none.
 - To close: browser tests of the 429 and timeout states in fixture mode, a screenshot of the badge, and the recorded quota.
+- Partial (2026-11-18): recorded mode exists with a sticky RECORDED badge, a "RECORDED · not live AI" preview chip and footer note, verified in the browser with a screenshot. The 429 countdown is browser-tested; the timeout and the other error states are unit-tested in `server/director/handler.test.ts`. Remaining: Malak records the project's Gemini quota. Target 2026-11-25 unchanged.
 
 ### WW-027 — Reducer accepts no-op visual and transform changes
 
@@ -696,7 +707,7 @@ enabled without approval.
 | Severity | Low |
 | Owner | Kiro |
 | Target | 2026-11-23 |
-| Status | OPEN |
+| Status | DONE (2026-11-18) |
 
 **Description.** The reducer rejects no-op renames and pin changes with
 "No change." so that history stays clean (`reducer.test.ts`, "treats a no-op
@@ -715,6 +726,47 @@ operations itself (`src/director/translate.ts`, `isNoOp`).
 **Verification evidence.**
 - Current: translator test "rejects no-op visual and transform changes" documents the behaviour. The reducer is unchanged.
 - To close: reducer tests, plus a browser check that clicking the active swatch adds no timeline entry.
+- Verified (2026-11-18): the reducer rejects visual and transform patches that change nothing (`src/core/reducer.ts`), covered by the "reducer no-op rule (WW-027)" tests in `src/core/batch.test.ts`. The browser test "WW-027: clicking the already-active swatch records no edit" first showed that the store still logged a rejected chip. The UI edit path now dry-runs and skips no-ops (`src/main.ts`), and the test passes. Commits `95c62cf` and `9c7d406`.
+
+### WW-028 — Vite config loader warns about extensionless imports
+
+| Field | Value |
+|---|---|
+| Severity | Low |
+| Owner | Kiro |
+| Target | 2026-12-01 |
+| Status | OPEN |
+
+**Description.** Since the Director proxy is mounted from `vite.config.ts`, Vite 8 prints: "Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite". The reason is extensionless imports in `server/director/*` and the `src/director` and `src/core` modules they import. The current default loader works: dev and preview both serve `/api/director`, and the health check returns 200. A future Vite major version may break config loading.
+
+**Acceptance criteria.**
+- Either the imports used by the config are made native-loader compatible (explicit extensions plus `allowImportingTsExtensions`), or the config pins `configLoader: 'bundler'` with a comment explaining why.
+- `npm run dev` and `npm run preview` start without the warning, and `/api/director/health` still returns 200.
+- Type check, unit tests, build and the browser suite still pass.
+
+**Verification evidence.**
+- Current (2026-11-18): warning text in the dev-server output; `/api/director/health` returns 200 through Vite.
+- To close: dev-server output without the warning, plus passing checks.
+
+### WW-029 — Browser suite is slow and contends with other agents on a shared machine
+
+| Field | Value |
+|---|---|
+| Severity | Low |
+| Owner | Kiro |
+| Target | 2026-11-25 |
+| Status | OPEN |
+
+**Description.** The Playwright suite uses software WebGL (SwiftShader). On this machine (about 8 GB RAM, often under 1 GB free) a run takes 5–17 minutes, against about 3 minutes when the machine is idle. When Kilo Code's own Playwright suite ran at the same time from its worktree, runs failed with timeouts: free RAM dropped to about 110–600 MB. Three tests also depended on a 1.5 s recorded latency; they were rewritten to hold requests deterministically (`holdDirector` in the spec). The per-test timeout was raised to 240 s. No assertions were weakened.
+
+**Acceptance criteria.**
+- Kiro and Kilo Code agree not to run browser suites at the same time, or use separate ports and lower parallelism (documented in `tech.md`).
+- Optionally, add a fast smoke subset (`--grep @smoke`) that runs in under 2 minutes.
+- Three consecutive passing full runs are recorded after any change to the suite.
+
+**Verification evidence.**
+- Current (2026-11-18): run timings and failures recorded during the Phase 2 session; after the deterministic-hold change, three consecutive 12/12 runs on `f8339e6` and 13/13 on `9c7d406`.
+- To close: documented coordination rule, plus run timings.
 
 ---
 
@@ -725,3 +777,4 @@ operations itself (`src/director/translate.ts`, `isNoOp`).
 | 2026-11-18 | Register created from the Phase 1 review: WW-001 to WW-020. |
 | 2026-11-18 | Phase 2 readiness: added WW-021 to WW-026. WW-020 moved to IN PROGRESS (new `WORLDWEAVER-WEBGL` worktree on Phase 1 code observed; checks unverified). No existing target dates changed. |
 | 2026-11-18 | Phase 2 started on `phase2/director`: WW-021 DONE (approval recorded). Added WW-027 (found by translator tests). No existing target dates changed. |
+| 2026-11-18 | Phase 2 Director implementation: WW-007, WW-010, WW-011, WW-012 and WW-027 DONE with evidence; WW-026 IN PROGRESS; WW-025 BLOCKED (needs a live run with Malak's key); evidence added to WW-015, WW-020 and WW-024. Added WW-028 and WW-029. No existing target dates changed. |

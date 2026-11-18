@@ -1,8 +1,10 @@
 # WORLDWEAVER Phase 2 Plan — Gemini World Director
 
-Status: **IN PROGRESS on branch `phase2/director`.** Approved by Malak on
-2026-11-18 (WW-021). P2-01 and P2-03 are implemented; see the step table in
-section 12. Every date is a target. Progress is recorded in
+Status: **IMPLEMENTED on branch `phase2/director`, except live Gemini
+verification.** Approved by Malak on 2026-11-18 (WW-021). Steps P2-00 to
+P2-07 and P2-09 are done; P2-08 (live smoke) and the live run of P2-02 are
+BLOCKED until they are run with Malak's key. See the step table in section 12
+and "As built" in section 13. Every date is a target. Progress is recorded in
 [ISSUE_REGISTER.md](ISSUE_REGISTER.md) and
 [DEVELOPMENT_SCHEDULE.md](DEVELOPMENT_SCHEDULE.md).
 
@@ -284,16 +286,35 @@ never presented as live AI.
 |---|---|---|---|---|---|
 | P2-00 | Malak | 2026-11-19 | Approve Phase 2 start, the proxy runtime (proposed: Node 24 with Vite dev middleware, no new dependency) and the fixture mode (WW-021) | Decision recorded in `tech.md` | DONE 2026-11-18 |
 | P2-01 | Kiro | 2026-11-20 | `src/director/schema.ts` and `validate.ts` with fixtures and unit tests (section 5, steps 2–5) | Tests pass; no new dependencies | DONE 2026-11-18 |
-| P2-02 | Kiro, Malak | 2026-11-21 | Write `tests/preflight/gemini_schema_v2_tests.ps1` (new file, header-based key, existing script untouched); Malak runs it (WW-025) | Live results recorded in `status.md` | Not started |
+| P2-02 | Kiro, Malak | 2026-11-21 | Live schema v2 compatibility test (header-based key, existing script untouched); Malak runs it (WW-025) | Live results recorded in `status.md` | Written 2026-11-18 as `tests/live/director.live.test.ts` (`npm run test:live`); live run **BLOCKED** (no key available to the agent) |
 | P2-03 | Kiro | 2026-11-21 | `src/director/context.ts` and `translate.ts`: refs, deterministic IDs and layout, event mapping (section 6) | Determinism and mapping tests pass | DONE 2026-11-18 |
-| P2-04 | Kiro | 2026-11-23 | `dispatchBatch`, `batch` log entries, undo/replay semantics (closes WW-007); reducer no-op rule (WW-027); optional `world/renamed` | Atomicity, undo and replay tests pass | Not started |
-| P2-05 | Kiro | 2026-11-23 | Director proxy plus Vite dev middleware; fixture mode; all controls in section 9 | Proxy tests pass; `dist/` key grep clean | Not started |
-| P2-06 | Kiro | 2026-11-24 | `src/director/client.ts`, `planner.ts`; enable the Director panel with review, Apply, Discard, Retry, cancel and the error states in section 8 | Unit tests pass; manual run in fixture mode | Not started |
-| P2-07 | Kiro | 2026-11-25 | Browser acceptance tests in fixture mode (requires WW-010 tooling approval) | Three consecutive passing runs | Not started |
-| P2-08 | Malak, Kiro | 2026-11-25 | Live smoke test with the real key; update `status.md` (Phase 2 DONE or PARTIAL with evidence) | Recorded results | Not started |
-| P2-09 | Kiro | 2026-11-25 | Phase 2 checkpoint on `phase2/director`; pull request for review; no merge without approval | Pushed branch and review requested | Branch created 2026-11-18 |
+| P2-04 | Kiro | 2026-11-23 | `dispatchBatch`, `batch` log entries, undo/replay semantics (closes WW-007); reducer no-op rule (WW-027); optional `world/renamed` | Atomicity, undo and replay tests pass | DONE 2026-11-18 (`95c62cf`) |
+| P2-05 | Kiro | 2026-11-23 | Director proxy plus Vite dev middleware; fixture mode; all controls in section 9 | Proxy tests pass; `dist/` key grep clean | DONE 2026-11-18 (`170ec32`) |
+| P2-06 | Kiro | 2026-11-24 | `src/director/client.ts`, controller (`controller.ts`, in place of `planner.ts`); enable the Director panel with review, Apply, Discard, Retry, cancel and the error states in section 8 | Unit tests pass; manual run in fixture mode | DONE 2026-11-18 (`002879d`) |
+| P2-07 | Kiro | 2026-11-25 | Browser acceptance tests in fixture mode (requires WW-010 tooling approval) | Three consecutive passing runs | DONE 2026-11-18: 3 × 12/12 on `f8339e6`, 13/13 on `9c7d406` |
+| P2-08 | Malak, Kiro | 2026-11-25 | Live smoke test with the real key; update `status.md` (Phase 2 DONE or PARTIAL with evidence) | Recorded results | **BLOCKED**: needs Malak's key |
+| P2-09 | Kiro | 2026-11-25 | Phase 2 checkpoint on `phase2/director`; pull request for review; no merge without approval | Pushed branch and review requested | Branch pushed; pull request not yet opened (needs Malak's go-ahead) |
 
-## 13. Risks
+## 13. As built (2026-11-18)
+
+Differences from the plan above, and what they mean:
+
+| Area | Plan | As built | Why |
+|---|---|---|---|
+| Proxy location | `server/director.ts` | `server/director/` (config, request validation, prompt, Gemini call, recordings, handler, Vite plugin) | Separation and testability |
+| Proxy hosting | Vite dev middleware | `directorPlugin()` in `vite.config.ts` mounts the same Node handler in **both** `npm run dev` and `npm run preview`; `createDirectorServer()` runs it standalone (tests, live suite) | One handler everywhere; the browser only talks to its own origin |
+| Fixture mode | `DIRECTOR_FIXTURES=1` | **Recorded mode**: `DIRECTOR_MODE=recorded`, or automatic when `GEMINI_API_KEY` is unset; 8 recordings in `server/director/recordings.ts`; `#error:<CODE>` test hooks (recorded mode only) | Clear naming; the mode is always labelled RECORDED in the UI |
+| Concurrency | One request at a time, others refused | A new request **supersedes** the running one (aborts it, replies 409 `SUPERSEDED`); live spacing of at least 5 s still enforced first | The browser test found that cancel-then-retry could hit a stale "busy" state |
+| Error codes | Section 4.2 list | Adds `LOCAL_RATE_LIMITED`, `SUPERSEDED`, `INVALID_PROPOSAL` (server-side validation), `TRUNCATED`, `MODEL_NOT_FOUND`, `UPSTREAM_BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `UNSUPPORTED_MEDIA_TYPE`, `TOO_LARGE` | More precise handling |
+| Proposal application | Drop invalid operations, apply the rest | **All-or-nothing**: any rejected operation blocks Apply; one proposal = one undo step | Required by the Phase 2 instruction |
+| Live test | PowerShell script | TypeScript live suite through the real proxy, validator and translator | Tests the real pipeline, not a copy |
+| Planner module | `planner.ts` | `controller.ts` (DOM-free state machine) plus `describe.ts` (review text) | Unit-testable UI logic |
+
+Verification: 225 unit tests (`npm test`); browser suite `npm run test:e2e`
+(13 tests, 3 consecutive passing runs); live suite `npm run test:live`
+(BLOCKED without a key).
+
+## 14. Risks
 
 | Risk | Impact | Mitigation |
 |---|---|---|
