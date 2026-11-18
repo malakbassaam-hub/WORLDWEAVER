@@ -47,14 +47,15 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-018 | Phase 1.5 visual improvement list not available | Medium | Malak | 2026-11-24 | BLOCKED (list) |
 | WW-019 | Citadel close-up glow washes out detail | Low | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
 | WW-020 | Kilo Code worktree is on the pre-Phase-1 commit | High | Kilo Code | 2026-11-19 | IN PROGRESS |
-| WW-021 | Phase 2 start and proxy runtime not approved | Critical | Malak | 2026-11-19 | BLOCKED (decision) |
+| WW-021 | Phase 2 start and proxy runtime not approved | Critical | Malak | 2026-11-19 | DONE |
 | WW-022 | Submission and deployment format undecided | High | Malak | 2026-11-24 | BLOCKED (decision) |
 | WW-023 | Flagship feature requirements need Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (WW-017) |
 | WW-024 | Preflight script sends the API key in the URL query | Medium | Kiro | 2026-11-21 | OPEN |
 | WW-025 | Gemini output schema v2 not tested against the live model | Medium | Kiro | 2026-11-21 | OPEN |
 | WW-026 | Gemini quota and availability risk for the live demo | Medium | Kiro | 2026-11-25 | OPEN |
+| WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | OPEN |
 
-**Totals:** 26 issues. Critical 1, High 6, Medium 13, Low 6. OPEN 13, BLOCKED 12, IN PROGRESS 1, DONE 0.
+**Totals:** 27 issues. Critical 1, High 6, Medium 13, Low 7. OPEN 14, BLOCKED 11, IN PROGRESS 1, DONE 1.
 
 ---
 
@@ -550,7 +551,7 @@ Kiro has not modified that worktree.
 | Severity | Critical |
 | Owner | Malak |
 | Target | 2026-11-19 |
-| Status | BLOCKED — awaiting decision |
+| Status | DONE (2026-11-18) |
 
 **Description.** Gemini world creation, Phase 2, is the first item on the
 critical path to the 2026-12-03 target. It needs three approvals before
@@ -566,8 +567,8 @@ recorded responses for tests and as a demo fallback. See
 - If the runtime differs from the proposal, `PHASE2_PLAN.md` and the schedule are updated the same day.
 
 **Verification evidence.**
-- Current: plan written; no decision recorded.
-- To close: commit containing the recorded decision.
+- Current: approved by Malak on 2026-11-18. Approved: Node.js 24 local proxy with no paid services; Gemini API key server-side only; recorded responses for deterministic tests; real Gemini integration remains mandatory; no flagship feature removed. Recorded in `.kiro/steering/tech.md` ("Phase 2 decisions").
+- To close: done. The decision is recorded in the same commit that starts Phase 2 on branch `phase2/director`.
 
 ### WW-022 — Submission and deployment format undecided
 
@@ -688,6 +689,33 @@ enabled without approval.
 - Current: none.
 - To close: browser tests of the 429 and timeout states in fixture mode, a screenshot of the badge, and the recorded quota.
 
+### WW-027 — Reducer accepts no-op visual and transform changes
+
+| Field | Value |
+|---|---|
+| Severity | Low |
+| Owner | Kiro |
+| Target | 2026-11-23 |
+| Status | OPEN |
+
+**Description.** The reducer rejects no-op renames and pin changes with
+"No change." so that history stays clean (`reducer.test.ts`, "treats a no-op
+change as rejected"). It does not do the same for `entity/visualChanged` or
+`entity/transformed`. A patch that sets values the entity already has is
+accepted, recorded in undo history and the timeline, and bumps provenance. One
+way to trigger it is clicking the already-active palette swatch in the
+inspector. Found while testing the Director translator, which now filters such
+operations itself (`src/director/translate.ts`, `isNoOp`).
+
+**Acceptance criteria.**
+- The reducer rejects visual and transform patches that change nothing, with "No change.".
+- New reducer unit tests cover both cases. Existing Phase 1 tests and editor behaviour still pass.
+- Fixed together with the store work in P2-04 (same target date), so undo and history semantics change in one place.
+
+**Verification evidence.**
+- Current: translator test "rejects no-op visual and transform changes" documents the behaviour. The reducer is unchanged.
+- To close: reducer tests, plus a browser check that clicking the active swatch adds no timeline entry.
+
 ---
 
 ## Change log
@@ -696,3 +724,4 @@ enabled without approval.
 |---|---|
 | 2026-11-18 | Register created from the Phase 1 review: WW-001 to WW-020. |
 | 2026-11-18 | Phase 2 readiness: added WW-021 to WW-026. WW-020 moved to IN PROGRESS (new `WORLDWEAVER-WEBGL` worktree on Phase 1 code observed; checks unverified). No existing target dates changed. |
+| 2026-11-18 | Phase 2 started on `phase2/director`: WW-021 DONE (approval recorded). Added WW-027 (found by translator tests). No existing target dates changed. |

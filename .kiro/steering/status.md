@@ -148,7 +148,7 @@ OS-locale digits (switched to text inputs); removed three.js
 
 | Feature | Status | What exists today |
 |---|---|---|
-| Natural-language world creation (Gemini) | PLANNED | `WorldPlanner` interface only; AI Director panel is a disabled placeholder |
+| Natural-language world creation (Gemini) | PARTIAL | On `phase2/director`: proposal schema v2, strict validation, world context and deterministic translation to `WorldEvent`s, unit tested. No proxy, no UI, no live Gemini calls yet. The AI Director panel is still a disabled placeholder. |
 | Natural-language world editing | PLANNED | Manual inspector edits only |
 | World Morph | PLANNED | `WorldMorph` interface only |
 | Pinned objects | PARTIAL | Pin flag on entities; pinned entities cannot be removed. Morph preservation PLANNED. |

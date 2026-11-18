@@ -8,8 +8,21 @@ inclusion: always
 
 Phase 1 established the client application: Vite + TypeScript + three.js (see
 `status.md`). Master Plan v1.2 is the approved direction; the document is not
-available in the repository. Persistence layer, deployment target and the
-Gemini proxy design are still undecided.
+available in the repository. Persistence layer and deployment target are still
+undecided.
+
+### Phase 2 decisions (approved by Malak, 2026-11-18)
+
+- Phase 2 (Gemini World Director) is approved, developed on `phase2/director`.
+- Gemini calls go through a **Node.js 24 local proxy**. No paid services.
+- The Gemini API key is **server-side only**: never in frontend code, URLs,
+  logs, commits or screenshots.
+- **Recorded responses** (fixture mode) are used for deterministic tests.
+  **Real Gemini integration remains mandatory.**
+- No flagship feature is removed.
+- Model output is untrusted data: strict validation (`src/director/validate.ts`),
+  then deterministic translation to `WorldEvent`s (`src/director/translate.ts`).
+  It is never evaluated as code.
 
 ---
 

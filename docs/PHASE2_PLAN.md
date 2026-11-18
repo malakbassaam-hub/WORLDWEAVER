@@ -1,9 +1,14 @@
 # WORLDWEAVER Phase 2 Plan — Gemini World Director
 
-Status: **PLAN ONLY. Implementation has not started.** Starting requires
-Malak's approval (WW-021). Every date is a target. Progress is recorded in
+Status: **IN PROGRESS on branch `phase2/director`.** Approved by Malak on
+2026-11-18 (WW-021). P2-01 and P2-03 are implemented; see the step table in
+section 12. Every date is a target. Progress is recorded in
 [ISSUE_REGISTER.md](ISSUE_REGISTER.md) and
 [DEVELOPMENT_SCHEDULE.md](DEVELOPMENT_SCHEDULE.md).
+
+Approved architecture: Node.js 24 local proxy, no paid services; Gemini API
+key server-side only; recorded responses for deterministic tests; real
+Gemini integration remains mandatory; no flagship feature is removed.
 
 - **Baseline:** commit `23e676e` on `phase1/engine-foundation`
 - **Master Plan v1.2:** not available (WW-017). This plan is derived from
@@ -62,8 +67,9 @@ Browser (Vite app)                            Local server (Node 24)            
 |---|---|---|
 | Proxy | `server/director.ts` (+ Vite dev middleware; runtime per WW-021) | Holds the key; validates input; calls Gemini; maps errors |
 | Client | `src/director/client.ts` | `fetch('/api/director')` with `AbortController`; typed results |
-| Schema + validator | `src/director/schema.ts`, `src/director/validate.ts` | `responseSchema` v2 plus a hand-written validator (no new dependency) |
-| Translator | `src/director/translate.ts` | Proposal → `WorldEvent[]`; deterministic IDs and layout |
+| Schema + validator | `src/director/schema.ts`, `src/director/validate.ts` (implemented) | `responseSchema` v2 plus a hand-written validator (no new dependency) |
+| World context | `src/director/context.ts` (implemented) | Ref summary (`e1…eN`) for the model; ref → `EntityId` map for the translator |
+| Translator | `src/director/translate.ts` (implemented) | Proposal → `WorldEvent[]`; deterministic IDs and layout; per-operation dry-run |
 | Planner | `src/director/planner.ts` | Implements the existing `WorldPlanner` contract; dry-run through the reducer |
 | Store | `src/core/store.ts` | New `dispatchBatch()`: all-or-nothing, single undo snapshot, single log entry |
 | UI | `src/ui/director.ts` | Enable the panel: prompt, status, review list, Apply, Discard, Retry |
@@ -146,10 +152,10 @@ Error codes: `NO_KEY`, `BAD_REQUEST`, `RATE_LIMITED`, `TIMEOUT`, `UPSTREAM`,
 
 1. **Transport.** Non-2xx or `ok:false` maps to a typed error (section 8). No retry.
 2. **Parse.** `JSON.parse` inside `try`. Failure produces `INVALID_JSON`, and the raw text is never rendered as HTML.
-3. **Shape.** Hand-written validator against schema v2: required fields, types, enums, unknown properties ignored.
-4. **Limits.** At most 24 operations per proposal; `count` 1–8; `glow` clamped to 0–10; names trimmed, control characters removed, at most 80 characters (`NAME_MAX_LENGTH`); empty names rejected.
-5. **Semantics.** Refs must exist. Operations on pinned entities are dropped in edit mode, and in Morph (section 10.1). The world total may not exceed 200 entities. `remove` of an entity with children is dropped, matching the reducer rule.
-6. **Dry-run.** The translated events are applied to a copy of the world with `applyEvent`. Any rejection removes that operation and records its reason. The proposal is applied only if the remaining set dry-runs cleanly.
+3. **Shape (strict).** Hand-written validator against schema v2: required fields, types and enums. **Unknown properties and unknown operation types are rejected**, as are `__proto__`, `constructor` and `prototype` keys and non-plain objects. Nothing is repaired or clamped.
+4. **Limits.** At most 24 operations per proposal and 64 added entities; `count` 1–8 with per-archetype caps (citadel 1, ring 2, island 3, light orb 4); `glow` 0–10; `steps` 1–5; finite numbers only. Text is NFC-normalised and trimmed; empty text, C0/C1 controls, bidi overrides and isolates, line separators, BOM and lone surrogates are rejected; names at most 80 UTF-16 units (`NAME_MAX_LENGTH`). Raw text at most 64 KB, checked before parsing. Up to 50 path-qualified issues are reported.
+5. **Semantics.** Refs must exist. Operations that change pinned entities are rejected (adding children to a pinned entity is allowed). The world total may not exceed 200 entities, and Director-added point lights stop at 6 per world. Operations that would change nothing are rejected as "No change.".
+6. **Dry-run.** Each operation's events are applied to a preview world with `applyEvent`, and each operation is accepted or rejected as a unit with its reason. The accepted events always replay to exactly the preview.
 7. **Review.** The UI lists accepted operations and dropped ones with reasons. Nothing changes until the user clicks **Apply**.
 
 All AI-provided text is treated as data. It is displayed with `textContent`, as
@@ -274,18 +280,18 @@ never presented as live AI.
 
 ## 12. Exact implementation steps
 
-| Step | Owner | Target | Work | Done when |
-|---|---|---|---|---|
-| P2-00 | Malak | 2026-11-19 | Approve Phase 2 start, the proxy runtime (proposed: Node 24 with Vite dev middleware, no new dependency) and the fixture mode (WW-021) | Decision recorded in `tech.md` |
-| P2-01 | Kiro | 2026-11-20 | `src/director/schema.ts` and `validate.ts` with fixtures and unit tests (section 5, steps 2–5) | Tests pass; no new dependencies |
-| P2-02 | Kiro, Malak | 2026-11-21 | Write `tests/preflight/gemini_schema_v2_tests.ps1` (new file, header-based key, existing script untouched); Malak runs it (WW-025) | Live results recorded in `status.md` |
-| P2-03 | Kiro | 2026-11-21 | `src/director/translate.ts`: refs, deterministic IDs and layout, event mapping (section 6) | Determinism and mapping tests pass |
-| P2-04 | Kiro | 2026-11-23 | `dispatchBatch`, `batch` log entries, undo/replay semantics (closes WW-007); optional `world/renamed` | Atomicity, undo and replay tests pass |
-| P2-05 | Kiro | 2026-11-23 | Director proxy plus Vite dev middleware; fixture mode; all controls in section 9 | Proxy tests pass; `dist/` key grep clean |
-| P2-06 | Kiro | 2026-11-24 | `src/director/client.ts`, `planner.ts`; enable the Director panel with review, Apply, Discard, Retry, cancel and the error states in section 8 | Unit tests pass; manual run in fixture mode |
-| P2-07 | Kiro | 2026-11-25 | Browser acceptance tests in fixture mode (requires WW-010 tooling approval) | Three consecutive passing runs |
-| P2-08 | Malak, Kiro | 2026-11-25 | Live smoke test with the real key; update `status.md` (Phase 2 DONE or PARTIAL with evidence) | Recorded results |
-| P2-09 | Kiro | 2026-11-25 | Phase 2 checkpoint commit on a `phase2/director` branch; pull request for review; no merge without approval | Pushed branch and review requested |
+| Step | Owner | Target | Work | Done when | Status |
+|---|---|---|---|---|---|
+| P2-00 | Malak | 2026-11-19 | Approve Phase 2 start, the proxy runtime (proposed: Node 24 with Vite dev middleware, no new dependency) and the fixture mode (WW-021) | Decision recorded in `tech.md` | DONE 2026-11-18 |
+| P2-01 | Kiro | 2026-11-20 | `src/director/schema.ts` and `validate.ts` with fixtures and unit tests (section 5, steps 2–5) | Tests pass; no new dependencies | DONE 2026-11-18 |
+| P2-02 | Kiro, Malak | 2026-11-21 | Write `tests/preflight/gemini_schema_v2_tests.ps1` (new file, header-based key, existing script untouched); Malak runs it (WW-025) | Live results recorded in `status.md` | Not started |
+| P2-03 | Kiro | 2026-11-21 | `src/director/context.ts` and `translate.ts`: refs, deterministic IDs and layout, event mapping (section 6) | Determinism and mapping tests pass | DONE 2026-11-18 |
+| P2-04 | Kiro | 2026-11-23 | `dispatchBatch`, `batch` log entries, undo/replay semantics (closes WW-007); reducer no-op rule (WW-027); optional `world/renamed` | Atomicity, undo and replay tests pass | Not started |
+| P2-05 | Kiro | 2026-11-23 | Director proxy plus Vite dev middleware; fixture mode; all controls in section 9 | Proxy tests pass; `dist/` key grep clean | Not started |
+| P2-06 | Kiro | 2026-11-24 | `src/director/client.ts`, `planner.ts`; enable the Director panel with review, Apply, Discard, Retry, cancel and the error states in section 8 | Unit tests pass; manual run in fixture mode | Not started |
+| P2-07 | Kiro | 2026-11-25 | Browser acceptance tests in fixture mode (requires WW-010 tooling approval) | Three consecutive passing runs | Not started |
+| P2-08 | Malak, Kiro | 2026-11-25 | Live smoke test with the real key; update `status.md` (Phase 2 DONE or PARTIAL with evidence) | Recorded results | Not started |
+| P2-09 | Kiro | 2026-11-25 | Phase 2 checkpoint on `phase2/director`; pull request for review; no merge without approval | Pushed branch and review requested | Branch created 2026-11-18 |
 
 ## 13. Risks
 

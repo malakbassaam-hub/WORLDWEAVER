@@ -1,17 +1,11 @@
+import { LUMINOUS_PALETTE } from '../core/palette';
 import { childrenOf, EMISSIVE_MAX, NAME_MAX_LENGTH } from '../core/reducer';
 import type { ColorHex, Entity, Vec3, VisualComponent, World } from '../core/types';
 import type { StudioActions } from './actions';
 import { clear, h, icon } from './dom';
 
-/** Luminous Night palette offered as one-click looks. */
-export const LUMINOUS_PALETTE: ReadonlyArray<{ name: string; color: ColorHex; emissive: ColorHex }> = [
-  { name: 'Aether Cyan', color: '#7fe8ff', emissive: '#2fd4ff' },
-  { name: 'Night Violet', color: '#b48cff', emissive: '#8b5cff' },
-  { name: 'Orchid Flare', color: '#ff9ce6', emissive: '#ff4fc8' },
-  { name: 'Aurora Mint', color: '#8cffd6', emissive: '#2cf0a8' },
-  { name: 'Ember Gold', color: '#ffd29a', emissive: '#ff9a3c' },
-  { name: 'Moon White', color: '#eef1ff', emissive: '#a9b8ff' },
-];
+/** Luminous Night palette offered as one-click looks (shared with the Director). */
+export { LUMINOUS_PALETTE };
 
 const fmt = (n: number) => String(Math.round(n * 100) / 100);
 

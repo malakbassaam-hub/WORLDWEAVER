@@ -26,7 +26,8 @@ status with evidence. Phase 2 details: [PHASE2_PLAN.md](PHASE2_PLAN.md).
 |---|---|---|
 | 2026-11-18 | Phase 1 engine foundation committed and pushed | Commit `3459f26` on `origin/phase1/engine-foundation` |
 | 2026-11-18 | Issue register and first schedule | Commit `23e676e` |
-| 2026-11-18 | Phase 2 plan, register update and this schedule | This documentation commit |
+| 2026-11-18 | Phase 2 plan, register update and this schedule | Commit `3be7356` |
+| 2026-11-18 | Phase 2 approved (WW-021); P2-01 schema and validator and P2-03 translator implemented ahead of their 2026-11-20 and 2026-11-21 targets | Branch `phase2/director` |
 
 ## Schedule
 
@@ -45,7 +46,7 @@ register issues, whose target dates are unchanged from the previous schedule.
 | 2026-11-21 | Malak | Run the v2 live preflight (at most 9 calls) | WW-025 | P2-02 |
 | 2026-11-21 | Kilo Code | WebGL context-loss recovery; verify WebGL-unavailable fallback; bloom capability check and fallback | WW-001, WW-002, WW-003 | WW-020 |
 | 2026-11-22 | Kiro | Readable entity names in the hierarchy; start atomic batch dispatch | WW-008, P2-04 | — |
-| 2026-11-23 | Kiro | Finish `dispatchBatch` with undo and replay semantics; Director proxy plus fixture mode and security controls | P2-04, P2-05, WW-007 | P2-00, P2-03 |
+| 2026-11-23 | Kiro | Finish `dispatchBatch` with undo and replay semantics; reducer rejects no-op visual and transform changes; Director proxy plus fixture mode and security controls | P2-04, P2-05, WW-007, WW-027 | P2-00, P2-03 |
 | 2026-11-24 | Kiro | Director client, planner and panel (review, Apply, Discard, Retry, error states); close undo/replay semantics; committed browser E2E suite (new dev dependency needs approval) | P2-06, WW-007, WW-010 | P2-04, P2-05; E2E tooling approval |
 | 2026-11-24 | Kilo Code | Renderer regression tests | WW-004 | WW-020 |
 | 2026-11-24 | Malak | Supply Master Plan v1.2 and the Phase 1.5 visual list; decide the submission and deployment format | WW-017, WW-018, WW-022, WW-023 | — |
