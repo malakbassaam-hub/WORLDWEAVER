@@ -289,21 +289,41 @@ describe('LIVE mode', () => {
     expect(calls).toHaveLength(2);
   });
 
-  it('allows only one request at a time', async () => {
-    let release!: () => void;
-    const gate = new Promise<void>((r) => (release = r));
-    const impl: FetchLike = async () => {
-      await gate;
-      return { ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(okUpstream(JSON.stringify({ summary: 's', operations: [{ op: 'hide', target: 'e4' }] }))) };
+  it('a new request supersedes the running one, aborting its upstream call', async () => {
+    const signals: AbortSignal[] = [];
+    const impl: FetchLike = (_url, init) => {
+      signals.push(init.signal);
+      if (signals.length === 1) {
+        return new Promise((_, reject) => init.signal.addEventListener('abort', () => reject(new Error('aborted'))));
+      }
+      return Promise.resolve({ ok: true, status: 200, headers: { get: () => null }, text: async () => JSON.stringify(okUpstream(JSON.stringify({ summary: 's', operations: [{ op: 'hide', target: 'e4' }] }))) });
     };
     const s = await start({ GEMINI_API_KEY: FAKE_KEY }, { fetchImpl: impl });
     const first = post(s, validBody());
-    await vi.waitFor(async () => {
-      const second = await post(s, validBody());
-      expect(second.json.code).toBe('BUSY');
+    await vi.waitFor(() => expect(signals).toHaveLength(1));
+    const second = await post(s, validBody());
+    expect(second.status).toBe(200);
+    const firstResult = await first;
+    expect(firstResult.status).toBe(409);
+    expect(firstResult.json.code).toBe('SUPERSEDED');
+    expect(signals[0]!.aborted).toBe(true); // the old upstream call was stopped
+  });
+
+  it('cancel followed immediately by a new request succeeds (regression)', async () => {
+    const s = await start({}, { overrides: { recordedLatencyMs: 1500 } });
+    const port = new URL(s.url).port;
+    await new Promise<void>((resolve) => {
+      const req = httpRequest({ host: '127.0.0.1', port, path: '/api/director', method: 'POST', headers: { 'content-type': 'application/json' } });
+      req.on('error', () => resolve());
+      req.end(JSON.stringify(validBody()));
+      setTimeout(() => {
+        req.destroy(); // the browser's Cancel
+        resolve();
+      }, 150);
     });
-    release();
-    expect((await first).status).toBe(200);
+    const next = await post(s, validBody()); // sent at once, possibly before the close is processed
+    expect(next.status).toBe(200);
+    expect(next.json.ok).toBe(true);
   });
 
   it('returns NO_KEY when live mode is forced without a key', async () => {

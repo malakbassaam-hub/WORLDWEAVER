@@ -36,6 +36,10 @@ pnpm-lock.yaml
 
 # Build output
 dist/
+# Browser test output (Playwright)
+test-results/
+playwright-report/
+blob-report/
 build/
 out/
 .next/

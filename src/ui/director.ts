@@ -11,7 +11,7 @@ const ERROR_TITLES: Readonly<Record<string, string>> = {
   MODEL_NOT_FOUND: 'Model not found',
   RATE_LIMITED: 'Gemini rate limit reached',
   LOCAL_RATE_LIMITED: 'Please wait a moment',
-  BUSY: 'Another request is running',
+  SUPERSEDED: 'Replaced by a newer request',
   TIMEOUT: 'Gemini took too long',
   NETWORK: 'Connection problem',
   UPSTREAM: 'Gemini error',

@@ -46,7 +46,7 @@ export class StudioShell {
       h('div', { class: 'ww-topbar-world' }, [
         h('span', { class: 'ww-world-title', text: world.name }),
         h('span', { class: 'ww-chip', text: `seed ${world.seed}` }),
-        h('span', { class: 'ww-chip is-phase', text: 'Phase 1 · Engine foundation' }),
+        h('span', { class: 'ww-chip is-phase', text: 'Phase 2 · AI World Director' }),
       ]),
       h('div', { class: 'ww-topbar-actions' }, [
         this.undoBtn,

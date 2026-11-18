@@ -172,7 +172,8 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ------------------------------------------------------------ director */
 
 .ww-director { flex: 0 1 auto; gap: 8px; max-height: 62vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--faint) transparent; }
-.ww-director .ww-panel-head { margin-bottom: 2px; }
+/* The LIVE / RECORDED badge stays visible while the panel scrolls. */
+.ww-director .ww-panel-head { margin: -14px -14px 2px; padding: 14px 14px 8px; position: sticky; top: -14px; z-index: 2; background: linear-gradient(180deg, rgba(14, 15, 34, 0.96) 70%, rgba(14, 15, 34, 0)); border-radius: var(--radius) var(--radius) 0 0; }
 .ww-director h2 .ww-icon { color: var(--violet); }
 .ww-director-input { width: 100%; min-height: 64px; resize: vertical; border-radius: 10px; padding: 9px 10px; background: rgba(0, 0, 0, 0.28); border: 1px solid rgba(155, 107, 255, 0.35); color: var(--ink); line-height: 1.45; outline: none; }
 .ww-director-input:focus { border-color: var(--glass-edge-hi); box-shadow: 0 0 0 3px rgba(64, 224, 255, 0.12); }
@@ -317,6 +318,7 @@ button, input, textarea { font: inherit; color: inherit; }
 .ww-title-card { position: absolute; top: 6px; left: 50%; transform: translateX(-50%); text-align: center; opacity: 0; animation: ww-title 5.5s var(--ease) 0.6s forwards; }
 .ww-title-card-name { margin: 4px 0 0; font-size: 26px; font-weight: 300; letter-spacing: 0.32em; text-transform: uppercase; color: #f1f4ff; text-shadow: 0 0 24px rgba(64, 224, 255, 0.55), 0 0 60px rgba(155, 107, 255, 0.45); white-space: nowrap; }
 @keyframes ww-title { 0% { opacity: 0; transform: translate(-50%, 8px); } 18% { opacity: 1; transform: translate(-50%, 0); } 70% { opacity: 1; } 100% { opacity: 0.0; } }
+@keyframes ww-title-narrow { 0% { opacity: 0; } 18% { opacity: 1; } 70% { opacity: 1; } 100% { opacity: 0; } }
 
 .ww-stats { position: absolute; top: 4px; right: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 4px 8px; border-radius: 8px; background: rgba(4, 5, 11, 0.45); }
 .ww-controls-hint { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); margin: 0; font-size: 11px; color: rgba(200, 206, 240, 0.6); white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
@@ -346,7 +348,20 @@ button, input, textarea { font: inherit; color: inherit; }
   .ww-timeline-legend, .ww-brand-sub, .ww-chip.is-phase { display: none; }
 }
 @media (max-width: 860px) {
-  .ww-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(220px, 1fr) auto auto auto; grid-template-areas: 'top' 'center' 'right' 'left' 'bottom'; overflow-y: auto; pointer-events: auto; }
+  /* minmax(0, 1fr): a plain 1fr column cannot shrink below its content and overflows small screens. */
+  .ww-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(220px, 1fr) auto auto auto; grid-template-areas: 'top' 'center' 'right' 'left' 'bottom'; overflow-y: auto; overflow-x: hidden; pointer-events: auto; }
+  /* Stacked layout: rows size to their content and the page scrolls vertically. */
+  .ww-layout { grid-template-rows: auto 260px auto auto auto; align-content: start; }
+  .ww-layout > * { min-width: 0; min-height: auto; }
+  .ww-col { min-height: auto; }
+  .ww-hierarchy { flex: none; max-height: 340px; }
+  .ww-right .ww-inspector { flex: none; max-height: 70vh; }
+  .ww-title-card { left: 0; right: 0; transform: none; padding: 0 8px; animation-name: ww-title-narrow; }
+  .ww-title-card-name { font-size: 16px; letter-spacing: 0.18em; white-space: normal; }
+  .ww-topbar { flex-wrap: wrap; gap: 8px; }
+  .ww-topbar-world { order: 3; flex-basis: 100%; justify-content: flex-start; flex-wrap: wrap; }
+  .ww-topbar-actions { margin-left: auto; flex-wrap: wrap; }
+  .ww-timeline { flex-direction: column; }
   .ww-director { max-height: none; }
   .ww-controls-hint { display: none; }
 }

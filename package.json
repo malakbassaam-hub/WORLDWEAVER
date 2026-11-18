@@ -12,14 +12,16 @@
     "dev": "vite",
     "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json && tsc --noEmit -p tests/tsconfig.json",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@types/node": "^24.19.2",
     "@types/three": "^0.187.0",
     "typescript": "^7.0.2",

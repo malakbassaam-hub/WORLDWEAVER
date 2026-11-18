@@ -36,7 +36,7 @@ export type ProxyErrorCode =
   | 'METHOD_NOT_ALLOWED'
   | 'UNSUPPORTED_MEDIA_TYPE'
   | 'TOO_LARGE'
-  | 'BUSY'
+  | 'SUPERSEDED'
   | 'LOCAL_RATE_LIMITED'
   | 'INVALID_PROPOSAL'
   | 'NOT_FOUND';
@@ -96,10 +96,10 @@ const STATUS: Readonly<Record<ProxyErrorCode, number>> = {
   FORBIDDEN_ORIGIN: 403,
   NOT_FOUND: 404,
   METHOD_NOT_ALLOWED: 405,
+  SUPERSEDED: 409,
   TOO_LARGE: 413,
   UNSUPPORTED_MEDIA_TYPE: 415,
   BLOCKED_SAFETY: 422,
-  BUSY: 429,
   LOCAL_RATE_LIMITED: 429,
   RATE_LIMITED: 429,
   NO_KEY: 503,
@@ -124,7 +124,14 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
   const fetchImpl: FetchLike = options.fetchImpl ?? ((input, init) => fetch(input, init));
   const logger = options.logger ?? defaultLogger;
   const now = options.now ?? Date.now;
-  let inFlight = false;
+  /**
+   * At most one request runs. A new request SUPERSEDES the running one: the
+   * UI sends one request at a time, so a new one means the old was abandoned
+   * (cancelled, or the page reloaded) even if its socket close has not been
+   * processed yet. The old request is aborted (stopping any upstream call) and
+   * answered with 409 SUPERSEDED if its client is still connected.
+   */
+  let current: { readonly abort: AbortController; superseded: boolean } | null = null;
   let lastUpstreamAt = Number.NEGATIVE_INFINITY;
 
   const health = (): HealthReport => ({
@@ -191,7 +198,7 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
     const request = valid.request;
     const logBase = { promptChars: request.prompt.length, entities: request.world.entityCount, task: request.mode };
 
-    if (inFlight) return fail('BUSY', 'Another Director request is still running.', { retryAfterSec: 1 }, logBase);
+    // Quota protection first: the spacing rule applies even when superseding.
     if (config.mode === 'live') {
       const wait = lastUpstreamAt + config.minIntervalMs - now();
       if (wait > 0) {
@@ -199,16 +206,24 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
       }
     }
 
-    // Cancel work if the browser goes away (Cancel button, navigation).
-    const cancel = new AbortController();
+    if (current) {
+      current.superseded = true;
+      current.abort.abort();
+    }
+    // Cancel work if the browser goes away (Cancel button, navigation) or a newer request arrives.
+    const mine = { abort: new AbortController(), superseded: false };
+    current = mine;
     const onClose = () => {
-      if (!res.writableEnded) cancel.abort();
+      if (!res.writableEnded) mine.abort.abort();
     };
     res.on('close', onClose);
-    inFlight = true;
     try {
-      const outcome = config.mode === 'live' ? await live(request, cancel.signal) : await recorded(request, cancel.signal);
-      if (!outcome.ok) return fail(outcome.code, outcome.message, outcome.retryAfterSec !== undefined ? { retryAfterSec: outcome.retryAfterSec } : {}, logBase);
+      const outcome = config.mode === 'live' ? await live(request, mine.abort.signal) : await recorded(request, mine.abort.signal);
+      if (!outcome.ok) {
+        if (outcome.code === 'CANCELLED' && mine.superseded) return fail('SUPERSEDED', 'A newer Director request replaced this one.', {}, logBase);
+        return fail(outcome.code, outcome.message, outcome.retryAfterSec !== undefined ? { retryAfterSec: outcome.retryAfterSec } : {}, logBase);
+      }
+      if (mine.superseded) return fail('SUPERSEDED', 'A newer Director request replaced this one.', {}, logBase);
 
       const checked = parseProposalText(outcome.text);
       if (!checked.ok) {
@@ -222,7 +237,7 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
       if (!res.writableEnded && !res.destroyed) sendJson(res, 200, success);
       logger.info({ event: 'director.request', requestId, mode: config.mode, status: 200, ms: now() - started, operations: checked.proposal.operations.length, ...logBase, ...(outcome.recordingId ? { recordingId: outcome.recordingId } : {}) });
     } finally {
-      inFlight = false;
+      if (current === mine) current = null;
       res.off('close', onClose);
     }
   }
