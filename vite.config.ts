@@ -1,11 +1,19 @@
 import { defineConfig } from 'vitest/config';
+import { directorPlugin } from './server/director/vite-plugin';
 
 // No `define` or env injection: secrets must never reach the client bundle.
-// Future Gemini calls will go through a server-side proxy (Phase 2+).
+// Gemini calls go through the Director proxy (server/director), mounted by
+// directorPlugin() in the Node.js dev and preview servers at /api/director.
 export default defineConfig({
+  plugins: [directorPlugin()],
   server: {
     host: '127.0.0.1',
     port: 5173,
+    strictPort: false,
+  },
+  preview: {
+    host: '127.0.0.1',
+    port: 4173,
     strictPort: false,
   },
   build: {
@@ -15,6 +23,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'server/**/*.test.ts'],
   },
 });

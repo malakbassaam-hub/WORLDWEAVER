@@ -2,17 +2,17 @@
   "name": "worldweaver",
   "private": true,
   "version": "0.1.0",
-  "description": "WORLDWEAVER - AI-assisted cinematic 3D world studio (Kiroween 2026). Phase 1: engine foundation.",
+  "description": "WORLDWEAVER - AI-assisted cinematic 3D world studio (Kiroween 2026). Phase 2: Gemini World Director.",
   "license": "MIT",
   "type": "module",
   "engines": {
-    "node": "^22.12.0 || >=24.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -20,6 +20,7 @@
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "@types/three": "^0.187.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
