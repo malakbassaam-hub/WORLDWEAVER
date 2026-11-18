@@ -2,8 +2,10 @@ import './ui/styles.css';
 import { WorldStore } from './core/store';
 import type { EntityId, WorldEventBody } from './core/types';
 import { SceneRenderer, WebGLUnavailableError } from './render/SceneRenderer';
+import { fetchHealth, requestProposal } from './director/client';
+import { DirectorController } from './director/controller';
 import type { StudioActions } from './ui/actions';
-import { createDirectorPanel } from './ui/director';
+import { DirectorPanel } from './ui/director';
 import { isTypingTarget } from './ui/dom';
 import { HierarchyPanel } from './ui/hierarchy';
 import { InspectorPanel } from './ui/inspector';
@@ -73,7 +75,29 @@ function boot(host: HTMLElement) {
   const hierarchy = new HierarchyPanel(actions);
   const inspector = new InspectorPanel(actions);
   const timeline = new TimelinePanel(actions, { seq: genesis.seq, entities: genesis.order.length, seed: genesis.seed });
-  shell.left.append(hierarchy.element, createDirectorPanel());
+
+  // AI World Director: talks only to the same-origin proxy at /api/director.
+  const director = new DirectorController({
+    store,
+    request: (body, signal) => requestProposal(body, { signal }),
+    health: (signal) => fetchHealth({ signal }),
+  });
+  const directorPanel = new DirectorPanel(director, store, {
+    onApplied: (entityIds, label) => {
+      const first = entityIds.find((id) => store.getState().entities[id]);
+      if (first) {
+        actions.select(first);
+        actions.focus(first);
+      }
+      shell.toast(`${label} · Undo with Ctrl+Z.`);
+    },
+    focusEntity: (id) => {
+      actions.select(id);
+      actions.focus(id);
+    },
+  });
+  void director.refreshHealth();
+  shell.left.append(hierarchy.element, directorPanel.element);
   shell.right.append(inspector.element);
   shell.bottom.append(timeline.element);
 
@@ -146,6 +170,8 @@ function boot(host: HTMLElement) {
   return () => {
     window.removeEventListener('keydown', onKey);
     window.clearInterval(statsTimer);
+    directorPanel.dispose();
+    director.dispose();
     unsubscribeStore();
     unsubscribeSelection();
     renderer?.dispose();
