@@ -92,6 +92,23 @@ test.describe('studio baseline', () => {
     await page.mouse.click(800, 450);
     await expect(page.locator('.ww-name-input')).toHaveValue('Aurelion Citadel');
   });
+
+  test('WW-027: clicking the already-active swatch records no edit', async ({ page }) => {
+    await openStudio(page);
+    await page.locator('.ww-tree-row', { hasText: 'Sentinel Spire I' }).first().click();
+    const active = page.locator('.ww-swatch.is-active');
+    await expect(active).toHaveAttribute('aria-label', 'Apply Aether Cyan');
+    const chips = page.locator('.ww-rail .ww-event');
+    const before = await chips.count();
+    await active.click();
+    await page.waitForTimeout(500);
+    await expect(chips).toHaveCount(before);
+    await expect(page.locator('.ww-topbar [aria-label="Undo"]')).toBeDisabled();
+    await expect(page.locator('.ww-toast')).toHaveCount(0); // "No change." is silent
+    // A real change is still recorded.
+    await page.locator('.ww-swatch[aria-label="Apply Night Violet"]').click();
+    await expect(chips).toHaveCount(before + 1);
+  });
 });
 
 test.describe('AI World Director (recorded mode)', () => {

@@ -1,4 +1,5 @@
 import './ui/styles.css';
+import { applyEvent } from './core/reducer';
 import { WorldStore } from './core/store';
 import type { EntityId, WorldEventBody } from './core/types';
 import { SceneRenderer, WebGLUnavailableError } from './render/SceneRenderer';
@@ -41,6 +42,13 @@ function boot(host: HTMLElement) {
     store,
     selection,
     edit(event: WorldEventBody) {
+      // UI no-ops (e.g. clicking the already-active swatch) are not dispatched
+      // at all, so they never appear in the timeline or history (WW-027).
+      const probe = applyEvent(store.getState(), { ...event, source: 'user' });
+      if (!probe.ok && probe.reason === 'No change.') {
+        if ('id' in event) renderer?.revertPreview(event.id);
+        return false;
+      }
       const result = store.dispatch({ ...event, source: 'user' });
       if (!result.ok && result.reason !== 'No change.') shell.toast(result.reason, 'warn');
       if (!result.ok && 'id' in event) renderer?.revertPreview(event.id);
