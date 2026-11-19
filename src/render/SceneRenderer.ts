@@ -11,6 +11,33 @@ import { disposeSharedTextures } from './textures';
 
 export type QualityMode = 'cinematic' | 'performance';
 
+// ============================================================================
+// World Morph transition interface (renderer side, Kilo Code)
+//
+// Matches the contract in src/core/presentation.ts (Kiro, not yet created).
+// When Kiro creates presentation.ts, this local type should be replaced by an
+// import from ../core/presentation and this file's methods kept in sync.
+// ============================================================================
+
+/** A single morph batch: state before, state after, and what changed. */
+export interface MorphTransition {
+  readonly kind: 'morph';
+  readonly before: World;
+  readonly after: World;
+  readonly changed: readonly EntityId[];
+  readonly pinned: readonly EntityId[]; // never animated
+  readonly maxDurationMs: number;       // 1200 (design default D-WM-4)
+}
+
+interface MorphTween {
+  readonly id: EntityId;
+  readonly binding: Binding;
+  readonly fromPos: THREE.Vector3;
+  readonly toPos: THREE.Vector3;
+  readonly start: number;
+  readonly duration: number;
+}
+
 export interface RendererCallbacks {
   onSelect(id: EntityId | null): void;
   onHover?(id: EntityId | null, clientX: number, clientY: number): void;
@@ -94,6 +121,12 @@ export class SceneRenderer {
   private lastWorld: World | null = null;
   /** Canvas element owned by the renderer; exposed so the shell can re-attach it after a fallback. */
   public readonly domElement: HTMLCanvasElement;
+
+  /** World Morph transition state (renderer side, Kilo Code). */
+  private morphTweens = new Map<EntityId, MorphTween>();
+  private morphStartTime = 0;
+  private morphDuration = 0;
+  private morphCancelled = false;
 
   constructor(
     private readonly container: HTMLElement,
@@ -256,6 +289,7 @@ export class SceneRenderer {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.cancelTransition();
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     const canvas = this.renderer.domElement;
@@ -548,6 +582,7 @@ export class SceneRenderer {
    */
   public rebuildResources(): void {
     if (this.disposed) return;
+    this.cancelTransition();
     try {
       // The bloom composer's render target is context-bound; rebuild it on next setQuality.
       if (this.composer) {
@@ -581,6 +616,101 @@ export class SceneRenderer {
       this.callbacks.onContextLost?.();
       throw error;
     }
+  }
+
+  /**
+   * Plays a World Morph transition: animates changed, non-pinned entities from
+   * `before` to `after` over `maxDurationMs`. World state is the truth —
+   * `sync(after)` runs first and stays correct with or without a transition.
+   *
+   * Rules:
+   *   - Pinned entities are never animated.
+   *   - Instant under prefers-reduced-motion or Performance quality mode.
+   *   - Presentation only: never mutates World or dispatches events.
+   *   - If `cancel()` is called, the frame after must match `after`.
+   *   - No new GPU resources survive the transition; dispose() cleans up.
+   */
+  public async playTransition(transition: MorphTransition): Promise<void> {
+    // World state is the truth: sync first, always correct.
+    this.sync(transition.after);
+
+    // Instant under reduced motion or Performance mode.
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    if (reducedMotion || this.quality === 'performance') {
+      this.refreshMarker();
+      return;
+    }
+
+    const pinned = new Set(transition.pinned);
+    const start = performance.now();
+    const duration = Math.max(1, transition.maxDurationMs) / 1000;
+    this.morphStartTime = start;
+    this.morphDuration = duration;
+    this.morphCancelled = false;
+    this.morphTweens.clear();
+
+    // Build tweens for changed, non-pinned entities that have bindings.
+    for (const id of transition.changed) {
+      if (pinned.has(id)) continue;
+      const binding = this.bindings.get(id);
+      if (!binding) continue;
+      const beforeEntity = transition.before.entities[id];
+      const afterEntity = transition.after.entities[id];
+      if (!beforeEntity || !afterEntity) continue;
+      const fromPos = new THREE.Vector3(...beforeEntity.components.transform.position);
+      const toPos = new THREE.Vector3(...afterEntity.components.transform.position);
+      if (fromPos.equals(toPos)) continue;
+      this.morphTweens.set(id, {
+        id,
+        binding,
+        fromPos,
+        toPos,
+        start: start / 1000,
+        duration,
+      });
+    }
+
+    if (this.morphTweens.size === 0) {
+      this.refreshMarker();
+      return;
+    }
+
+    // Drive the tweens through the animation frame loop.
+    await new Promise<void>((resolve) => {
+      const step = () => {
+        if (this.morphCancelled) {
+          this.morphTweens.clear();
+          this.sync(transition.after);
+          this.refreshMarker();
+          resolve();
+          return;
+        }
+        const now = performance.now() / 1000;
+        const k = Math.min(1, (now - this.morphStartTime / 1000) / this.morphDuration);
+        const ease = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+
+        for (const tween of this.morphTweens.values()) {
+          tween.binding.root.position.lerpVectors(tween.fromPos, tween.toPos, ease);
+        }
+
+        if (k >= 1) {
+          this.morphTweens.clear();
+          this.refreshMarker();
+          resolve();
+        } else {
+          requestAnimationFrame(step);
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  /** Stops the morph at once and shows `after` exactly. Called on undo, redo,
+   *  new edit, new morph, context loss and dispose. */
+  public cancelTransition(): void {
+    this.morphCancelled = true;
+    this.morphTweens.clear();
+    this.refreshMarker();
   }
 }
 
