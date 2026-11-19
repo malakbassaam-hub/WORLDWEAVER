@@ -12,7 +12,7 @@ import type { EntityId } from '../core/types';
 import { applyTranslation, type ApplyOutcome } from './apply';
 import { buildWorldContext } from './context';
 import type { ClientResult, DirectorRequestBody, HealthInfo, ProxyMode } from './client';
-import { applyMorph, PROPOSED_MORPH_POLICY, translateMorph, type MorphPolicy, type MorphTranslation } from './morph';
+import { applyMorph, APPROVED_MORPH_POLICY, translateMorph, type MorphPolicy, type MorphTranslation } from './morph';
 import type { WorldProposal } from './schema';
 import { translateProposal, type Translation } from './translate';
 import { parseProposalText, type ValidationIssue } from './validate';
@@ -148,7 +148,7 @@ export class DirectorController {
   /**
    * Requests a World Morph (whole-world restyle with pinned-entity protection).
    * Refused with MORPH_DISABLED unless the controller was created with
-   * `morph: { enabled: true }`. Not enabled in the studio (WW-031, WW-025).
+   * `morph: { enabled: true }`. Not enabled in the studio until WW-025 and WW-030 pass (WW-031 policy approved).
    */
   async generateMorph(rawPrompt: string): Promise<void> {
     if (this.isBusy()) return;
@@ -263,7 +263,7 @@ export class DirectorController {
 
   private translate(kind: DirectorPreview['kind'], proposal: WorldProposal): Translation {
     const world = this.deps.store.getState();
-    return kind === 'morph' ? translateMorph(world, proposal, this.deps.morph?.policy ?? PROPOSED_MORPH_POLICY) : translateProposal(world, proposal);
+    return kind === 'morph' ? translateMorph(world, proposal, this.deps.morph?.policy ?? APPROVED_MORPH_POLICY) : translateProposal(world, proposal);
   }
 
   /** The ONLY path by which the Director changes the world. */

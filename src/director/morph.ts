@@ -10,8 +10,8 @@
  *      pose and effective visibility must be unchanged in the preview.
  *
  * STATUS: implemented and unit-tested, NOT enabled. The policy defaults below
- * are PROPOSED (WW-031) and not approved; live Gemini behaviour for morph
- * prompts is unverified (WW-025). Nothing here performs network requests.
+ * are approved (WW-031, 2026-11-19); live Gemini behaviour for morph prompts
+ * is unverified (WW-025). Nothing here performs network requests.
  */
 import { hashString } from '../core/random';
 import { effectiveVisible, posesEqual, worldPose } from '../core/pose';
@@ -36,17 +36,28 @@ export interface MorphPolicy {
   readonly allowAddToPinned: boolean;
 }
 
-/** Proposed defaults from WORLD_MORPH_PLAN.md section 2. NOT APPROVED (WW-031). */
-export const PROPOSED_MORPH_POLICY: MorphPolicy = Object.freeze({
+/**
+ * Defaults approved by Malak on 2026-11-19 (WW-031):
+ * - Policy A, D-WM-1: a morph that would modify an existing pinned entity is
+ *   rejected as a whole ('reject-proposal').
+ * - Policy B, D-WM-2: ancestors of pinned entities are protected from changes
+ *   that would affect the pinned descendant (move, hide/show, remove).
+ * - Policy C, D-WM-3: new children may be added under pinned entities, as long
+ *   as the pinned entity's data, world pose and visibility stay unchanged
+ *   (enforced by `checkPinnedInvariant`).
+ */
+export const APPROVED_MORPH_POLICY: MorphPolicy = Object.freeze({
   onPinViolation: 'reject-proposal',
   protectAncestors: true,
   allowAddToPinned: true,
 });
 
 export const MORPH_POLICY_STATUS = Object.freeze({
-  approved: false,
+  approved: true,
   issue: 'WW-031',
-  note: 'Defaults are proposals awaiting Malak\'s decision; World Morph is not enabled in the studio.',
+  approvedBy: 'Malak',
+  approvedOn: '2026-11-19',
+  note: 'Policies A, B and C (D-WM-1 to D-WM-3) are approved. D-WM-4 (transition duration) is still a proposal. Approval does not enable World Morph: it stays off until the live test (WW-025) and studio integration (WW-030) gates pass.',
 });
 
 export function describePolicy(policy: MorphPolicy): string {
@@ -188,7 +199,7 @@ export interface MorphTranslation extends Translation {
   readonly blockedReason?: string;
 }
 
-export function translateMorph(world: World, proposal: WorldProposal, policy: MorphPolicy = PROPOSED_MORPH_POLICY): MorphTranslation {
+export function translateMorph(world: World, proposal: WorldProposal, policy: MorphPolicy = APPROVED_MORPH_POLICY): MorphTranslation {
   const t = translateProposal(world, proposal, { guard: morphGuard(policy) });
   const closure = pinClosure(world);
   const violations = checkPinnedInvariant(world, t.preview, closure.pinned);
