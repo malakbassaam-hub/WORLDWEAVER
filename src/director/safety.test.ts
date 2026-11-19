@@ -27,6 +27,7 @@ describe('director safety', () => {
   it('scans every director production module', () => {
     expect(production.map(([p]) => p).sort()).toEqual([
       './apply.ts',
+      './characters.ts',
       './client.ts',
       './context.ts',
       './controller.ts',
