@@ -309,7 +309,8 @@ test.describe('World Morph (recorded mode)', () => {
     await expect(preview).toBeVisible();
     await expect(preview).toContainText('World Morph preview');
     await expect(preview).toContainText('Pinned entities');
-    await expect(preview).toContainText('Morph policy is proposed but not yet approved (WW-031).');
+    // WW-031 policies A-C were approved on 2026-11-19, so the "not yet approved" note must not appear.
+    await expect(preview).not.toContainText('Morph policy is proposed but not yet approved (WW-031).');
     await expect(action(page, 'apply')).toBeEnabled();
     await action(page, 'apply').click();
     await expect(card(page, 'applied')).toBeVisible();
