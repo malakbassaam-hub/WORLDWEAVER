@@ -135,6 +135,59 @@ export const RECORDINGS: readonly Recording[] = [
       ],
     },
   },
+  // ---- World Morph (served only when DIRECTOR_MORPH=1; see docs/WORLD_MORPH_PLAN.md)
+  {
+    id: 'morph-violet-dusk',
+    label: 'Violet dusk morph (default)',
+    mode: 'morph',
+    isDefault: true,
+    keywords: ['violet', 'purple', 'dusk', 'night', 'بنفسجي', 'غسق', 'ليل'],
+    response: {
+      summary: 'Sink the kingdom into violet dusk: violet spires, a violet main isle, softer wisps and a hidden halo.',
+      operations: [
+        { op: 'recolor', target: 'e4', palette: 'Night Violet' },
+        { op: 'recolor', target: 'e6', palette: 'Night Violet' },
+        { op: 'recolor', target: 'e8', palette: 'Night Violet' },
+        { op: 'recolor', target: 'e1', palette: 'Night Violet' },
+        { op: 'recolor', target: 'e10', palette: 'Night Violet' },
+        { op: 'glow', target: 'e20', glow: 2.5 },
+        { op: 'glow', target: 'e21', glow: 2.5 },
+        { op: 'hide', target: 'e3' },
+      ],
+    },
+  },
+  {
+    id: 'morph-ember-ruin',
+    label: 'Ember ruin morph',
+    mode: 'morph',
+    keywords: ['ember', 'ruin', 'fire', 'apocalyptic', 'dark', 'ash', 'جمر', 'خراب', 'نار', 'رماد'],
+    response: {
+      summary: 'Turn the kingdom into an ember ruin: gold-burnt spires, a sunken isle, dimmed wisps and a new ember spire.',
+      operations: [
+        { op: 'recolor', target: 'e4', palette: 'Ember Gold' },
+        { op: 'recolor', target: 'e5', palette: 'Ember Gold' },
+        { op: 'recolor', target: 'e6', palette: 'Ember Gold' },
+        { op: 'recolor', target: 'e7', palette: 'Ember Gold' },
+        { op: 'move', target: 'e12', direction: 'down' },
+        { op: 'hide', target: 'e23' },
+        { op: 'hide', target: 'e24' },
+        { op: 'add', archetype: 'obelisk', name: 'Ember Spire', placement: 'outer-ring', palette: 'Ember Gold', glow: 3 },
+      ],
+    },
+  },
+  {
+    id: 'morph-shift-isle',
+    label: 'Lift the main isle (shows ancestor protection)',
+    mode: 'morph',
+    keywords: ['lift the isle', 'raise the isle', 'move the isle', 'shift', 'ارفع الجزيرة', 'حرك الجزيرة'],
+    response: {
+      summary: 'Lift the Isle of Aurelion higher into the sky and brighten one spire.',
+      operations: [
+        { op: 'move', target: 'e1', direction: 'up', steps: 2 },
+        { op: 'glow', target: 'e4', glow: 4 },
+      ],
+    },
+  },
 ];
 
 /** Deterministic selection: highest keyword hit count, ties → list order, none → mode default. */

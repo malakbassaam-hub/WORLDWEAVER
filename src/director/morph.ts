@@ -1,0 +1,246 @@
+/**
+ * World Morph domain logic (docs/WORLD_MORPH_PLAN.md).
+ *
+ * A Morph restyles many unpinned entities with ONE World Proposal (schema v2,
+ * no new operation types). Pinned entities are preserved by three layers:
+ *   1. model guidance (prompt; untrusted),
+ *   2. translator rules: the built-in pinned check plus `morphGuard` (pinned
+ *      ancestors, children of pinned entities),
+ *   3. `checkPinnedInvariant`: before apply, every pinned entity's data, world
+ *      pose and effective visibility must be unchanged in the preview.
+ *
+ * STATUS: implemented and unit-tested, NOT enabled. The policy defaults below
+ * are PROPOSED (WW-031) and not approved; live Gemini behaviour for morph
+ * prompts is unverified (WW-025). Nothing here performs network requests.
+ */
+import { hashString } from '../core/random';
+import { effectiveVisible, posesEqual, worldPose } from '../core/pose';
+import type { WorldStore } from '../core/store';
+import type { Entity, EntityId, World, WorldEvent } from '../core/types';
+import { applyTranslation, type ApplyContext, type ApplyOutcome } from './apply';
+import type { WorldProposal } from './schema';
+import { translateProposal, type GuardRejection, type OperationGuard, type Translation } from './translate';
+
+// ---------------------------------------------------------------- policy
+
+export interface MorphPolicy {
+  /**
+   * D-WM-1. 'reject-proposal': any pin-rule rejection blocks the whole morph.
+   * 'drop-operation': pin-rule rejections are dropped and listed; the rest may
+   * apply. Non-pin rejections (unknown refs, invalid values) always block.
+   */
+  readonly onPinViolation: 'reject-proposal' | 'drop-operation';
+  /** D-WM-2. Also protect ancestors of pinned entities from move, hide/show and remove. */
+  readonly protectAncestors: boolean;
+  /** D-WM-3. Allow adding new children directly under a pinned entity. */
+  readonly allowAddToPinned: boolean;
+}
+
+/** Proposed defaults from WORLD_MORPH_PLAN.md section 2. NOT APPROVED (WW-031). */
+export const PROPOSED_MORPH_POLICY: MorphPolicy = Object.freeze({
+  onPinViolation: 'reject-proposal',
+  protectAncestors: true,
+  allowAddToPinned: true,
+});
+
+export const MORPH_POLICY_STATUS = Object.freeze({
+  approved: false,
+  issue: 'WW-031',
+  note: 'Defaults are proposals awaiting Malak\'s decision; World Morph is not enabled in the studio.',
+});
+
+export function describePolicy(policy: MorphPolicy): string {
+  return `${policy.onPinViolation};ancestors=${policy.protectAncestors ? 'protected' : 'free'};addToPinned=${policy.allowAddToPinned ? 'allowed' : 'blocked'}`;
+}
+
+// ---------------------------------------------------------------- pin closure
+
+export interface PinClosure {
+  /** Entities with `pinned: true`, in world order. */
+  readonly pinned: readonly EntityId[];
+  /** Ancestors of pinned entities (excluding pinned entities themselves), in world order. */
+  readonly protectedAncestors: readonly EntityId[];
+  /** Ancestor → the first pinned descendant it protects (for messages). */
+  readonly protects: ReadonlyMap<EntityId, EntityId>;
+}
+
+export function pinClosure(world: World): PinClosure {
+  const pinned = world.order.filter((id) => world.entities[id]?.pinned);
+  const pinnedSet = new Set<EntityId>(pinned);
+  const protects = new Map<EntityId, EntityId>();
+  for (const id of pinned) {
+    const seen = new Set<string>([id]);
+    for (let p = world.entities[id]?.parentId ?? null; p && world.entities[p] && !seen.has(p); p = world.entities[p]?.parentId ?? null) {
+      seen.add(p);
+      if (!pinnedSet.has(p) && !protects.has(p)) protects.set(p, id);
+    }
+  }
+  const protectedAncestors = world.order.filter((id) => protects.has(id));
+  return { pinned, protectedAncestors, protects };
+}
+
+/** Order-independent fingerprint of the pinned set (FNV-1a over sorted IDs). */
+export function pinnedHash(pinned: readonly EntityId[]): string {
+  return hashString([...pinned].sort().join('\n')).toString(36);
+}
+
+// ---------------------------------------------------------------- guard
+
+function name(world: World, id: EntityId): string {
+  return `“${world.entities[id]?.name ?? id}”`;
+}
+
+function eventTarget(event: WorldEvent): EntityId {
+  return event.type === 'entity/added' ? event.entity.id : event.id;
+}
+
+/** Translator guard enforcing the morph pin rules against the preview world. */
+export function morphGuard(policy: MorphPolicy): OperationGuard {
+  return ({ events, preview }) => {
+    const closure = pinClosure(preview);
+    for (const event of events) {
+      if (event.type === 'entity/added') {
+        const parent = event.entity.parentId;
+        if (!policy.allowAddToPinned && parent && preview.entities[parent]?.pinned) {
+          return reject(`Adding “${event.entity.name}” under pinned ${name(preview, parent)} is not allowed by the morph policy.`, 'pinned-parent');
+        }
+        continue;
+      }
+      if (!policy.protectAncestors) continue;
+      const id = eventTarget(event);
+      const child = closure.protects.get(id);
+      if (!child) continue;
+      if (event.type === 'entity/transformed') {
+        return reject(`Moving ${name(preview, id)} would move pinned ${name(preview, child)}.`, 'pinned-ancestor');
+      }
+      if (event.type === 'entity/removed') {
+        return reject(`Removing ${name(preview, id)} would remove the parent of pinned ${name(preview, child)}.`, 'pinned-ancestor');
+      }
+      if (event.type === 'entity/visualChanged' && event.patch.visible !== undefined) {
+        const verb = event.patch.visible ? 'Showing' : 'Hiding';
+        return reject(`${verb} ${name(preview, id)} would change the visibility of pinned ${name(preview, child)}.`, 'pinned-ancestor');
+      }
+    }
+    return null;
+  };
+}
+
+function reject(reason: string, rule: GuardRejection['rule']): GuardRejection {
+  return rule ? { reason, rule } : { reason };
+}
+
+// ---------------------------------------------------------------- invariant
+
+export interface PinnedViolation {
+  readonly id: EntityId;
+  readonly kind: 'removed' | 'data' | 'pose' | 'visibility';
+  readonly message: string;
+}
+
+/**
+ * Each pinned entity (as of `before`) must keep, in `after`: the same data
+ * (including provenance), the same world pose, and the same effective
+ * visibility. Returns all violations (empty = invariant holds).
+ */
+export function checkPinnedInvariant(before: World, after: World, pinned: readonly EntityId[] = pinClosure(before).pinned): PinnedViolation[] {
+  const violations: PinnedViolation[] = [];
+  for (const id of pinned) {
+    const a = before.entities[id];
+    const b = after.entities[id];
+    if (!a) continue;
+    if (!b) {
+      violations.push({ id, kind: 'removed', message: `Pinned ${name(before, id)} was removed.` });
+      continue;
+    }
+    if (a !== b && canonical(a) !== canonical(b)) {
+      violations.push({ id, kind: 'data', message: `Pinned ${name(before, id)} was changed.` });
+    }
+    const pa = worldPose(before, id);
+    const pb = worldPose(after, id);
+    if (pa && pb && !posesEqual(pa, pb)) {
+      violations.push({ id, kind: 'pose', message: `Pinned ${name(before, id)} would move in the world.` });
+    }
+    if (effectiveVisible(before, id) !== effectiveVisible(after, id)) {
+      violations.push({ id, kind: 'visibility', message: `Pinned ${name(before, id)} would change visibility.` });
+    }
+  }
+  return violations;
+}
+
+function canonical(entity: Entity): string {
+  return JSON.stringify(entity);
+}
+
+// ---------------------------------------------------------------- translate + apply
+
+export interface MorphTranslation extends Translation {
+  readonly kind: 'morph';
+  readonly policy: MorphPolicy;
+  readonly policyApproved: boolean;
+  readonly pinned: readonly EntityId[];
+  readonly protectedAncestors: readonly EntityId[];
+  readonly pinnedHash: string;
+  /** Operations rejected by pin rules (always listed, even when dropped). */
+  readonly pinRejections: number;
+  /** Invariant violations found in the preview (must be empty to apply). */
+  readonly violations: readonly PinnedViolation[];
+  /** Why the morph cannot be applied, if `applicable` is false. */
+  readonly blockedReason?: string;
+}
+
+export function translateMorph(world: World, proposal: WorldProposal, policy: MorphPolicy = PROPOSED_MORPH_POLICY): MorphTranslation {
+  const t = translateProposal(world, proposal, { guard: morphGuard(policy) });
+  const closure = pinClosure(world);
+  const violations = checkPinnedInvariant(world, t.preview, closure.pinned);
+  const rejected = t.outcomes.filter((o) => o.status === 'rejected');
+  const pinRejections = rejected.filter((o) => o.rule !== undefined).length;
+  const otherRejections = rejected.length - pinRejections;
+
+  let blockedReason: string | undefined;
+  if (t.events.length === 0) blockedReason = 'The morph contains no applicable changes.';
+  else if (violations.length > 0) blockedReason = violations.map((v) => v.message).join(' ');
+  else if (otherRejections > 0) blockedReason = `${otherRejections} operation${otherRejections === 1 ? ' was' : 's were'} rejected; a morph is applied completely or not at all.`;
+  else if (pinRejections > 0 && policy.onPinViolation === 'reject-proposal') {
+    blockedReason = `${pinRejections} operation${pinRejections === 1 ? '' : 's'} would change pinned entities; the morph policy rejects the whole morph.`;
+  }
+
+  return {
+    ...t,
+    applicable: blockedReason === undefined,
+    kind: 'morph',
+    policy,
+    policyApproved: MORPH_POLICY_STATUS.approved,
+    pinned: closure.pinned,
+    protectedAncestors: closure.protectedAncestors,
+    pinnedHash: pinnedHash(closure.pinned),
+    pinRejections,
+    violations,
+    ...(blockedReason !== undefined ? { blockedReason } : {}),
+  };
+}
+
+/**
+ * Applies a morph as ONE atomic batch (one undo step). Re-checks the pinned
+ * invariant against the store's current state and the translation's preview.
+ */
+export function applyMorph(store: WorldStore, morph: MorphTranslation, ctx: Omit<ApplyContext, 'kind' | 'extraDetails'>): ApplyOutcome {
+  if (!morph.applicable) {
+    return { ok: false, code: 'NOT_APPLICABLE', reason: morph.blockedReason ?? 'The morph cannot be applied.' };
+  }
+  const current = store.getState();
+  if (current.seq === morph.baseSeq) {
+    const recheck = checkPinnedInvariant(current, morph.preview, morph.pinned);
+    if (recheck.length > 0) return { ok: false, code: 'NOT_APPLICABLE', reason: recheck.map((v) => v.message).join(' ') };
+  }
+  return applyTranslation(store, morph, {
+    ...ctx,
+    kind: 'morph',
+    extraDetails: {
+      pinnedCount: String(morph.pinned.length),
+      pinnedHash: morph.pinnedHash,
+      policy: describePolicy(morph.policy),
+      policyApproved: String(morph.policyApproved),
+      pinRejections: String(morph.pinRejections),
+    },
+  });
+}

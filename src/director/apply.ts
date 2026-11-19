@@ -7,11 +7,18 @@ import type { Translation } from './translate';
 
 export type DirectorMode = 'live' | 'recorded';
 
+/** What kind of Director change a batch records (for the Causal Ledger). */
+export type DirectorChangeKind = 'create' | 'edit' | 'morph';
+
 export interface ApplyContext {
   readonly mode: DirectorMode;
   readonly model?: string;
   readonly requestId?: string;
   readonly recordingId?: string;
+  /** Recorded in batch details as `kind`; omitted when not given (Phase 2 behaviour). */
+  readonly kind?: DirectorChangeKind;
+  /** Additional string details (never secrets or prompt text). Cannot override standard keys. */
+  readonly extraDetails?: Readonly<Record<string, string>>;
 }
 
 export type ApplyOutcome =
@@ -21,12 +28,15 @@ export type ApplyOutcome =
 export const DIRECTOR_LABEL_MAX = 120;
 
 export function batchMetaFor(translation: Translation, ctx: ApplyContext): BatchMeta {
-  const prefix = ctx.mode === 'recorded' ? 'Director (recorded)' : 'Director';
+  const base = ctx.kind === 'morph' ? 'Morph' : 'Director';
+  const prefix = ctx.mode === 'recorded' ? `${base} (recorded)` : base;
   const label = `${prefix}: ${translation.display.summary}`;
   return {
     label: label.length > DIRECTOR_LABEL_MAX ? `${label.slice(0, DIRECTOR_LABEL_MAX - 1)}…` : label,
     source: 'director',
     details: {
+      ...(ctx.extraDetails ?? {}),
+      ...(ctx.kind ? { kind: ctx.kind } : {}),
       proposalKey: translation.proposalKey,
       mode: ctx.mode,
       ...(ctx.model ? { model: ctx.model } : {}),

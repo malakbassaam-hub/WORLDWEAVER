@@ -9,9 +9,10 @@
  */
 import type { WorldStore } from '../core/store';
 import type { EntityId } from '../core/types';
-import { applyTranslation } from './apply';
+import { applyTranslation, type ApplyOutcome } from './apply';
 import { buildWorldContext } from './context';
 import type { ClientResult, DirectorRequestBody, HealthInfo, ProxyMode } from './client';
+import { applyMorph, PROPOSED_MORPH_POLICY, translateMorph, type MorphPolicy, type MorphTranslation } from './morph';
 import type { WorldProposal } from './schema';
 import { translateProposal, type Translation } from './translate';
 import { parseProposalText, type ValidationIssue } from './validate';
@@ -30,7 +31,10 @@ export interface DirectorError {
 }
 
 export interface DirectorPreview {
+  /** 'morph' previews are translated and applied with the World Morph pin rules. */
+  readonly kind: 'proposal' | 'morph';
   readonly proposal: WorldProposal;
+  /** A `MorphTranslation` when `kind` is 'morph'. */
   readonly translation: Translation;
   readonly mode: ProxyMode;
   readonly requestId: string;
@@ -66,6 +70,8 @@ export interface DirectorDeps {
   readonly request: (body: DirectorRequestBody, signal: AbortSignal) => Promise<ClientResult>;
   readonly health?: (signal: AbortSignal) => Promise<HealthInfo | null>;
   readonly now?: () => number;
+  /** World Morph is off unless explicitly enabled. Policy defaults to the (unapproved) proposal. */
+  readonly morph?: { readonly enabled: boolean; readonly policy?: MorphPolicy };
 }
 
 const NOT_RETRYABLE = new Set(['NO_KEY', 'AUTH', 'MODEL_NOT_FOUND', 'BAD_REQUEST', 'FORBIDDEN_ORIGIN', 'BLOCKED_SAFETY', 'PROMPT_INVALID', 'UPSTREAM_BAD_REQUEST']);
@@ -85,7 +91,7 @@ export class DirectorController {
   private readonly now: () => number;
   private token = 0;
   private inflight: AbortController | null = null;
-  private lastRequest: { prompt: string; task: DirectorTask } | null = null;
+  private lastRequest: { prompt: string; task: DirectorTask; morph: boolean } | null = null;
   private applying = false;
   private readonly unsubscribeStore: () => void;
 
@@ -131,6 +137,34 @@ export class DirectorController {
 
   /** Sends a request. Ignored while another request is running (no duplicates). */
   async generate(rawPrompt: string, task: DirectorTask = this.state.task): Promise<void> {
+    return this.run(rawPrompt, task, false);
+  }
+
+  /** True only when World Morph was explicitly enabled for this controller. */
+  isMorphEnabled(): boolean {
+    return this.deps.morph?.enabled === true;
+  }
+
+  /**
+   * Requests a World Morph (whole-world restyle with pinned-entity protection).
+   * Refused with MORPH_DISABLED unless the controller was created with
+   * `morph: { enabled: true }`. Not enabled in the studio (WW-031, WW-025).
+   */
+  async generateMorph(rawPrompt: string): Promise<void> {
+    if (this.isBusy()) return;
+    if (!this.isMorphEnabled()) {
+      this.set({
+        status: 'error',
+        prompt: rawPrompt.normalize('NFC').trim(),
+        preview: null,
+        error: { code: 'MORPH_DISABLED', message: 'World Morph is not enabled yet.', issues: [], retryAt: null, retryable: false },
+      });
+      return;
+    }
+    return this.run(rawPrompt, this.state.task, true);
+  }
+
+  private async run(rawPrompt: string, task: DirectorTask, morph: boolean): Promise<void> {
     if (this.isBusy()) return;
     const prompt = rawPrompt.normalize('NFC').trim();
     if (prompt.length === 0 || prompt.length > PROMPT_MAX_CHARS) {
@@ -149,10 +183,10 @@ export class DirectorController {
     const token = ++this.token;
     const abort = new AbortController();
     this.inflight = abort;
-    this.lastRequest = { prompt, task };
+    this.lastRequest = { prompt, task, morph };
     const ctx = buildWorldContext(this.deps.store.getState());
     const body: DirectorRequestBody = {
-      mode: task,
+      mode: morph ? 'morph' : task,
       prompt,
       world: { worldName: ctx.worldName, biome: ctx.biome, entityCount: ctx.entityCount, entities: ctx.entities },
     };
@@ -184,10 +218,12 @@ export class DirectorController {
       this.fail('INVALID_PROPOSAL', 'The proposal did not pass validation.', parsed.errors.slice(0, 10));
       return;
     }
-    const translation = translateProposal(this.deps.store.getState(), parsed.proposal);
+    const kind = morph ? 'morph' : 'proposal';
+    const translation = this.translate(kind, parsed.proposal);
     this.set({
       status: 'preview',
       preview: {
+        kind,
         proposal: parsed.proposal,
         translation,
         mode: result.mode,
@@ -213,35 +249,46 @@ export class DirectorController {
     if (this.state.status !== 'error' || !this.state.error?.retryable || !this.lastRequest) return;
     const at = this.state.error.retryAt;
     if (at && at > this.now()) return;
-    await this.generate(this.lastRequest.prompt, this.lastRequest.task);
+    const { prompt, task, morph } = this.lastRequest;
+    if (morph) await this.generateMorph(prompt);
+    else await this.generate(prompt, task);
   }
 
   /** Re-translates the same validated proposal against the current world (no model call). */
   refreshPreview(): void {
     const p = this.state.preview;
     if (this.state.status !== 'preview' || !p) return;
-    this.set({ preview: { ...p, translation: translateProposal(this.deps.store.getState(), p.proposal), stale: false } });
+    this.set({ preview: { ...p, translation: this.translate(p.kind, p.proposal), stale: false } });
+  }
+
+  private translate(kind: DirectorPreview['kind'], proposal: WorldProposal): Translation {
+    const world = this.deps.store.getState();
+    return kind === 'morph' ? translateMorph(world, proposal, this.deps.morph?.policy ?? PROPOSED_MORPH_POLICY) : translateProposal(world, proposal);
   }
 
   /** The ONLY path by which the Director changes the world. */
   apply(): boolean {
     const p = this.state.preview;
     if (this.state.status !== 'preview' || !p || p.stale) return false;
+    if (p.kind === 'morph' && !this.isMorphEnabled()) return false;
+    const ctx = {
+      mode: p.mode,
+      requestId: p.requestId,
+      ...(p.model ? { model: p.model } : {}),
+      ...(p.recordingId ? { recordingId: p.recordingId } : {}),
+    };
     this.applying = true;
-    let outcome: ReturnType<typeof applyTranslation>;
+    let outcome: ApplyOutcome;
     try {
-      outcome = applyTranslation(this.deps.store, p.translation, {
-        mode: p.mode,
-        requestId: p.requestId,
-        ...(p.model ? { model: p.model } : {}),
-        ...(p.recordingId ? { recordingId: p.recordingId } : {}),
-      });
+      outcome = p.kind === 'morph' ? applyMorph(this.deps.store, p.translation as MorphTranslation, ctx) : applyTranslation(this.deps.store, p.translation, ctx);
     } finally {
       this.applying = false;
     }
     if (!outcome.ok) {
       if (outcome.code === 'STALE') this.set({ preview: { ...p, stale: true } });
-      else if (outcome.code === 'REJECTED') this.fail('APPLY_REJECTED', outcome.reason, []);
+      else if (outcome.code === 'REJECTED' || (p.kind === 'morph' && outcome.code === 'NOT_APPLICABLE' && p.translation.applicable)) {
+        this.fail('APPLY_REJECTED', outcome.reason, []);
+      }
       return false;
     }
     const entityIds = p.translation.events.flatMap((e) => (e.type === 'entity/added' ? [e.entity.id] : [e.id]));

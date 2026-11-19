@@ -31,6 +31,18 @@ export const SYSTEM_INSTRUCTION = [
   'For "create", prefer add operations. For "edit", change existing entities by ref.',
 ].join('\n');
 
+/** Appended for task "morph" only; the create/edit instruction above is unchanged. */
+export const MORPH_INSTRUCTION = [
+  'Task "morph" restyles the WHOLE world in one proposal: change many unpinned entities so the world reads as one coherent new look.',
+  'Prefer recolor, glow, rename, show and hide; use add, move and remove sparingly.',
+  'Entities whose "pinned" is true must stay exactly as they are.',
+  'Their ancestors (follow "parentRef" upwards from a pinned entity) must not be moved, hidden, shown or removed; recolor, glow and rename are allowed.',
+].join('\n');
+
+export function systemInstructionFor(mode: DirectorRequest['mode']): string {
+  return mode === 'morph' ? `${SYSTEM_INSTRUCTION}\n${MORPH_INSTRUCTION}` : SYSTEM_INSTRUCTION;
+}
+
 export function buildGeminiBody(request: DirectorRequest) {
   const userTurn = {
     task: request.mode,
@@ -42,7 +54,7 @@ export function buildGeminiBody(request: DirectorRequest) {
     },
   };
   return {
-    systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
+    systemInstruction: { parts: [{ text: systemInstructionFor(request.mode) }] },
     contents: [{ role: 'user', parts: [{ text: JSON.stringify(userTurn) }] }],
     generationConfig: {
       responseMimeType: 'application/json',

@@ -17,6 +17,8 @@ export interface DirectorConfig {
   readonly minIntervalMs: number;
   readonly recordedLatencyMs: number;
   readonly apiBase: string;
+  /** World Morph requests are accepted only when DIRECTOR_MORPH=1 (default off; WW-031, WW-025). */
+  readonly morphEnabled: boolean;
   /** Returns the key for the upstream header. Never log or return its value. */
   getApiKey(): string | null;
 }
@@ -30,6 +32,7 @@ export interface ConfigOverrides {
   readonly timeoutMs?: number;
   readonly recordedLatencyMs?: number;
   readonly apiBase?: string;
+  readonly morphEnabled?: boolean;
 }
 
 function intFrom(value: string | undefined, fallback: number, min: number, max: number): number {
@@ -47,6 +50,7 @@ function intFrom(value: string | undefined, fallback: number, min: number, max: 
  * - DIRECTOR_TIMEOUT_MS        1000..60000, default 30000
  * - DIRECTOR_MIN_INTERVAL_MS   >= 5000 (tech.md rate rule), default 5000
  * - DIRECTOR_RECORDED_LATENCY_MS 0..5000, default 700 (makes the loading state visible)
+ * - DIRECTOR_MORPH             "1" or "true" accepts World Morph requests (default off)
  */
 export function readConfig(env: Readonly<Record<string, string | undefined>>, overrides: ConfigOverrides = {}): DirectorConfig {
   const rawKey = env.GEMINI_API_KEY?.trim();
@@ -72,6 +76,9 @@ export function readConfig(env: Readonly<Record<string, string | undefined>>, ov
     modeReason = 'GEMINI_API_KEY is not set';
   }
 
+  const morphFlag = env.DIRECTOR_MORPH?.trim().toLowerCase();
+  const morphEnabled = overrides.morphEnabled ?? (morphFlag === '1' || morphFlag === 'true');
+
   const modelRaw = env.GEMINI_MODEL?.trim();
   const model = modelRaw && MODEL_PATTERN.test(modelRaw) ? modelRaw : DEFAULT_MODEL;
 
@@ -84,8 +91,9 @@ export function readConfig(env: Readonly<Record<string, string | undefined>>, ov
     minIntervalMs: overrides.minIntervalMs ?? intFrom(env.DIRECTOR_MIN_INTERVAL_MS, 5_000, 5_000, 600_000),
     recordedLatencyMs: overrides.recordedLatencyMs ?? intFrom(env.DIRECTOR_RECORDED_LATENCY_MS, 700, 0, 5_000),
     apiBase: overrides.apiBase ?? GEMINI_API_BASE,
+    morphEnabled,
     getApiKey: () => key,
     // Defensive: if anything ever serialises the config, the key is absent.
-    toJSON: () => ({ mode, modeReason, model, keyConfigured: key !== null }),
+    toJSON: () => ({ mode, modeReason, model, keyConfigured: key !== null, morphEnabled }),
   } as DirectorConfig & { toJSON(): unknown });
 }
