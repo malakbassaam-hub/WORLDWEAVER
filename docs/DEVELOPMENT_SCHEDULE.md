@@ -51,20 +51,30 @@ register issues, whose target dates are unchanged from the previous schedule.
 |---|---|---|---|---|
 | 2026-11-19 | Malak | **Approve Phase 2 start, proxy runtime and fixture mode** | WW-021, P2-00 | — |
 | 2026-11-19 | Kilo Code | Confirm install, tests, type check and build in the WebGL worktree | WW-020 | — |
+| 2026-11-19 | Malak | **Run the live Gemini test and the Create/Edit smoke test with your own key** ([LIVE_TEST_RUNBOOK.md](LIVE_TEST_RUNBOOK.md)); send back the summary, never the key | WW-025, P2-08 | — |
 | 2026-11-20 | Kiro | Schema v2 and validator with fixtures and unit tests | P2-01 | — |
 | 2026-11-20 | Kiro | Fix preview leakage; stop full re-renders on rejected events; re-run console check | WW-005, WW-006, WW-011 | — |
+| 2026-11-20 | Malak | Approve creating `integration/phase2-webgl`: Kilo's `phase1.5/webgl-recovery` merged into a copy of `phase2/director`, with `main` untouched | WW-030 | — |
 | 2026-11-21 | Kiro | Write the v2 live preflight script (header-based key; existing script untouched); translator with deterministic IDs and layout | P2-02, P2-03, WW-024 | P2-01 |
 | 2026-11-21 | Malak | Run the v2 live preflight (at most 9 calls) | WW-025 | P2-02 |
 | 2026-11-21 | Kilo Code | WebGL context-loss recovery; verify WebGL-unavailable fallback; bloom capability check and fallback | WW-001, WW-002, WW-003 | WW-020 |
+| 2026-11-21 | Kiro, Kilo Code | Integration branch: type check, unit tests, build, browser suite ×3 and a context-loss browser test; each owner fixes semantic conflicts in their own files | WW-030, WW-001 | Approval (11-20) |
+| 2026-11-21 | Malak, Kiro | Review the live results; go or no-go for World Morph | WW-025, WM-00 | Live run (11-19) |
 | 2026-11-22 | Kiro | Readable entity names in the hierarchy; start atomic batch dispatch | WW-008, P2-04 | — |
+| 2026-11-22 | Malak | Confirm or replace the World Morph defaults D-WM-1 to D-WM-4 | WW-031 | — |
+| 2026-11-22 | Kiro | WM-01 pin closure and pinned invariant; WM-02 morph request mode, instruction and recordings | WM | WM-00 |
 | 2026-11-23 | Kiro | Finish `dispatchBatch` with undo and replay semantics; reducer rejects no-op visual and transform changes; Director proxy plus fixture mode and security controls | P2-04, P2-05, WW-007, WW-027 | P2-00, P2-03 |
 | 2026-11-24 | Kiro | Director client, planner and panel (review, Apply, Discard, Retry, error states); close undo/replay semantics; committed browser E2E suite (new dev dependency needs approval) | P2-06, WW-007, WW-010 | P2-04, P2-05; E2E tooling approval |
+| 2026-11-23 | Kiro | WM-03 Ledger-ready batch metadata; WM-04 transition contract and presenter hook (instant fallback) | WM | WM-01 |
 | 2026-11-24 | Kilo Code | Renderer regression tests | WW-004 | WW-020 |
+| 2026-11-24 | Kiro | WM-05 Director Morph task, with pin-rejection reasons in the preview | WM | WM-04 |
+| 2026-11-24 to 2026-11-26 | Kilo Code | WM-K1 `SceneRenderer.playTransition` and `cancelTransition` per the contract | WM | WM-04, WW-030 |
 | 2026-11-24 | Malak | Supply Master Plan v1.2 and the Phase 1.5 visual list; decide the submission and deployment format | WW-017, WW-018, WW-022, WW-023 | — |
 | 2026-11-25 | Kiro | Phase 2 browser acceptance in fixture mode; quota-safe states and "Recorded responses" badge; Phase 2 checkpoint branch and pull request | P2-07, P2-09, WW-026 | P2-06, WW-010 |
 | 2026-11-25 | Malak, Kiro | Live smoke test with the real key; **flagship depth decision** (how deep each feature goes by 2026-12-03; no feature removed) | P2-08 | P2-06 |
 | 2026-11-25 | Kiro, Kilo Code | Agree a rule so browser suites do not run at the same time; optional fast smoke subset | WW-029 | — |
-| 2026-11-26 | Kiro | World Morph with pinned-object enforcement on the Phase 2 pipeline (provisional scope) | WM | P2-09 |
+| 2026-11-25 | Kiro, Malak | WM-06 browser acceptance tests (3 consecutive runs); WM-07 one live morph case (the 9th request) | WM | WM-05 |
+| 2026-11-26 | Kiro | World Morph with pinned-object enforcement on the Phase 2 pipeline (provisional scope): WM-08 integrates Kilo's transition; World Morph DONE with evidence ([WORLD_MORPH_PLAN.md](WORLD_MORPH_PLAN.md)) | WM | P2-09, WM-06, WM-K1 |
 | 2026-11-26 | Kiro | Responsive and reduced-motion verification at five viewport sizes | WW-015 | — |
 | 2026-11-26 | Kilo Code | Reduce draw calls; tune citadel close-up glow; optional Morph transition effect | WW-014, WW-019, WM | WW-020 |
 | 2026-11-26 | Malak | Measure performance on a real GPU in both quality modes | WW-009 | — |
@@ -84,6 +94,26 @@ register issues, whose target dates are unchanged from the previous schedule.
 | 2026-12-02 | Malak, Kiro | Feature freeze; update `status.md` and README; decide whether to merge into `main` | INT | Regression results |
 | 2026-12-03 | Malak | Submission preparation target | — | Freeze |
 
+## Day-by-day
+
+| Date | Main focus | Who |
+|---|---|---|
+| 2026-11-19 | Live Gemini test and smoke test (runbook); Kilo worktree checks | Malak, Kilo Code |
+| 2026-11-20 | Approve the integration branch; preview-leak and redundant-render fixes | Malak, Kiro |
+| 2026-11-21 | Integration branch green; live results reviewed (World Morph gate) | Kiro, Kilo Code, Malak |
+| 2026-11-22 | World Morph defaults; WM-01 and WM-02 | Malak, Kiro |
+| 2026-11-23 | WM-03 and WM-04 | Kiro |
+| 2026-11-24 | WM-05; Kilo transition starts; Master Plan, Phase 1.5 list and submission format due | Kiro, Kilo Code, Malak |
+| 2026-11-25 | WM-06 and WM-07; flagship depth decision; browser-suite coordination rule | Kiro, Malak, Kilo Code |
+| 2026-11-26 | World Morph DONE; responsive checks; real-GPU measurement | Kiro, Kilo Code, Malak |
+| 2026-11-27 | Causal Ledger core; Master Plan gap analysis | Kiro, Kilo Code |
+| 2026-11-28 | Persistence; Ledger `explain()`; Phase 1.5 visuals | Malak, Kiro, Kilo Code |
+| 2026-11-29 | Parallel Futures | Kiro, Kilo Code |
+| 2026-11-30 | Living Characters part 1; bundle split; audit re-check | Kiro |
+| 2026-12-01 | Living Characters part 2; integration scenario; full regression; Vite loader fix | Kiro, Malak |
+| 2026-12-02 | Master Plan conformance (BLOCKED without the document); feature freeze | Kiro, Malak |
+| 2026-12-03 | Submission preparation target | Malak |
+
 ## Critical path
 
 ```
@@ -94,14 +124,17 @@ WW-021 approval (11-19)
   → P2-04 dispatchBatch + undo/replay, WW-007 (11-23)
   → P2-05 proxy (11-23) → P2-06 Director panel (11-24)
   → P2-07/P2-09 acceptance + checkpoint (11-25)
-  → WM World Morph (11-26)
+  → WW-025 live run (11-19) and review (11-21) ─┐
+  → WW-030 integration branch green (11-21) ────┤ gates
+  → WW-031 Morph defaults (11-22) ──────────────┘
+  → WM World Morph (WM-01 11-22 … WM-08 11-26)
   → CL Causal Ledger (11-27/28) ← WW-016 persistence (11-28)
   → PF Parallel Futures (11-29)
   → LC Living Characters (11-30/12-01) ← WW-016, Kilo LC archetype (11-27)
   → INT integration + regression (12-01) → freeze (12-02) → submission (12-03)
 ```
 
-- **Float:** none after 2026-11-25. Every flagship feature is on the critical path because Kiro builds them in sequence.
+- **Float:** Phase 2 finished early, so World Morph can start on 2026-11-22 instead of 2026-11-26, but only after its three gates. From 2026-11-26 there is no float: every flagship feature is on the critical path because Kiro builds them in sequence.
 - **Parallel tracks (off the critical path):** Kilo Code WebGL hardening (WW-001 to WW-004, WW-014, WW-019) and rendering for the flagship features; Malak's decisions and documents.
 - **Earliest blocker:** WW-021 on 2026-11-19. P2-01 and P2-03 can start without it, but P2-05 (proxy) cannot.
 

@@ -57,6 +57,18 @@ undecided.
 - Visual and transform patches that change nothing are rejected with
   "No change." (WW-027). The UI does not dispatch such no-ops at all.
 
+### File ownership (Kiro / Kilo Code)
+
+- **Kilo Code** owns `src/render/**`, including renderer tests. Kiro does not
+  edit these files.
+- **Kiro** owns everything else: `src/core/**`, `src/director/**`,
+  `server/**`, `src/ui/**`, `src/main.ts`, tests outside `src/render/`,
+  configuration, packages, docs and steering. Kilo proposes changes to
+  `src/ui/shell.ts` and `src/main.ts` through review.
+- Work arrives through branches and reviewed merges only, never by editing the
+  other agent's worktree. Nothing is merged into `main` without Malak's
+  approval. Details: `docs/WORLD_MORPH_PLAN.md` section 7.
+
 ### Test commands
 
 `npm test` (unit, no network); `npm run test:e2e` (Playwright, installed

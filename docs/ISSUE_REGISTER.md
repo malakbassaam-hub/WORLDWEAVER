@@ -56,8 +56,10 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | DONE |
 | WW-028 | Vite config loader warns about extensionless imports | Low | Kiro | 2026-12-01 | OPEN |
 | WW-029 | Browser suite is slow and contends with other agents on a shared machine | Low | Kiro | 2026-11-25 | OPEN |
+| WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | BLOCKED (approval) |
+| WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN |
 
-**Totals:** 29 issues. Critical 1, High 6, Medium 13, Low 9. OPEN 9, BLOCKED 12, IN PROGRESS 2, DONE 6.
+**Totals:** 31 issues. Critical 1, High 7, Medium 14, Low 9. OPEN 10, BLOCKED 13, IN PROGRESS 2, DONE 6.
 
 ---
 
@@ -88,6 +90,7 @@ cannot bring the viewport back without a page reload.
 **Verification evidence.**
 - Current: code inspection only (line references above). Never exercised in a browser.
 - To close: automated browser test using `WEBGL_lose_context`, with before, lost and restored screenshots and the console log.
+- Current (2026-11-18): Kilo Code pushed `phase1.5/webgl-recovery` at `c582edf` ("fix: restore WebGL viewport after context loss"). It changes `src/render/SceneRenderer.ts` and `src/main.ts` (`onContextRestored` re-syncs the renderer) and `src/ui/shell.ts` (`hideFallback`), and adds `src/render/SceneRenderer.context-loss.test.ts`. Kiro read these from git objects only. That test skips itself in Vitest's Node environment, so it proves nothing in `npm test`. Its note says no browser tool was available, but `phase2/director` now has Playwright, so a real `WEBGL_lose_context` browser test is possible on the integration branch (WW-030). Not closed.
 
 ### WW-002 — WebGL-unavailable fallback never verified in a browser
 
@@ -551,6 +554,7 @@ Kiro has not modified that worktree.
 - Current (2026-11-18, later listing): a new worktree `C:/Users/user/WORLDWEAVER-WEBGL` on branch `phase1.5/webgl-recovery` at `3459f26` (Phase 1). The branch is not on `origin` yet. The `capricious-mars` worktree still exists. Kiro has not run any command inside either worktree, so install, test, type-check and build results there are unverified.
 - To close: Kilo Code reports `git log -1` plus passing `npm test`, `npm run typecheck` and `npm run build` from `WORLDWEAVER-WEBGL`. WW-001 to WW-004, WW-014 and WW-019 then change from BLOCKED to OPEN.
 - Current (2026-11-18, Phase 2 session): `WORLDWEAVER-WEBGL` is at `c582edf` on `phase1.5/webgl-recovery`. Kilo Code ran its own Playwright suite there (observed processes, read-only). Its results have not been reported to Kiro, so the acceptance checks remain unverified.
+- Current (2026-11-18, readiness check): `phase1.5/webgl-recovery` is on `origin` at `c582edf`, based on `3459f26`. Kilo Code has still not reported install, test, type-check and build results. Kiro has not touched either Kilo worktree.
 
 ### WW-021 — Phase 2 start and proxy runtime not approved
 
@@ -675,6 +679,7 @@ Gemini's handling of v2 has never been tested.
 - Current: none. v2 schema exists only in the plan.
 - To close: script committed, dry-run output, and live results.
 - Partial (2026-11-18): instead of the planned PowerShell script, the live suite is TypeScript, `tests/live/director.live.test.ts` (`npm run test:live`), so it exercises the real proxy, validator and translator: 8 live calls (cap 9), at least 5.3 s apart, no retries, key in the header only. Run without a key: BLOCKED, 0 calls, recorded in `test-results/live-gemini.json`. It has not run live because no key is available to the agent. **Live compatibility is not claimed.** Target 2026-11-21 unchanged.
+- Current (2026-11-18): live suite audited without making requests: model `gemini-3.5-flash-lite` (`DEFAULT_MODEL`), schema `PROPOSAL_RESPONSE_SCHEMA` sent as `responseSchema`, 8 requests (cap 9) through the local proxy only, 5.3 s spacing, no retries, key only in the `x-goog-api-key` header (pinned by proxy tests). Runbook with hidden key entry: [LIVE_TEST_RUNBOOK.md](LIVE_TEST_RUNBOOK.md). Still BLOCKED until Malak runs it; target 2026-11-21 unchanged.
 
 ### WW-026 — Gemini quota and availability risk for the live demo
 
@@ -768,6 +773,57 @@ operations itself (`src/director/translate.ts`, `isNoOp`).
 - Current (2026-11-18): run timings and failures recorded during the Phase 2 session; after the deterministic-hold change, three consecutive 12/12 runs on `f8339e6` and 13/13 on `9c7d406`.
 - To close: documented coordination rule, plus run timings.
 
+### WW-030 — Phase 2 and WebGL branches not integration-tested
+
+| Field | Value |
+|---|---|
+| Severity | High |
+| Owner | Kiro (integration branch and tests); Kilo Code (fixes in `src/render/**`) |
+| Target | 2026-11-21 |
+| Status | BLOCKED — needs Malak's approval to create the integration branch |
+
+**Description.** Kilo Code's `phase1.5/webgl-recovery` (`c582edf`) and `phase2/director` (`efa19be`) both start from `3459f26`. Two files overlap: `src/main.ts` and `src/ui/shell.ts`. An in-memory trial merge (`git merge-tree`, no working-tree change) is **textually clean**: both files auto-merge and the result tree is `64caf8b`. The **semantic** result has not been tested. The specific risks:
+- Kilo's `onContextRestored` calls `renderer.sync(store.getState())`. It must also restore Director-added entities, the selection marker and any pending Director preview. The Director panel must keep working while the fallback is shown.
+- `showFallback` and `hideFallback` replace the viewport's children; the Director panel and toasts must not be affected.
+- Kilo's `SceneRenderer.context-loss.test.ts` is now picked up by the Phase 2 Vitest include (`src/**/*.test.ts`). It skips itself under Node, so it would add no real coverage, and it must pass the stricter Phase 2 type-check projects.
+- Kilo's branch has not run the Phase 2 browser suite, and Phase 2 has not run with Kilo's renderer changes.
+- Kilo's note that no browser tool exists is out of date: Playwright is on `phase2/director`, so WW-001 can be verified with a real `WEBGL_lose_context` test.
+
+**Acceptance criteria.**
+- Malak approves an integration branch, for example `integration/phase2-webgl`, created from `phase2/director` with `origin/phase1.5/webgl-recovery` merged in. Neither `main` nor the source branches are changed.
+- On that branch, `npm run typecheck`, `npm test`, `npm run build` and `npm run test:e2e` (3 consecutive runs) pass.
+- A new browser test forces `WEBGL_lose_context` loss and restore while the Director has an applied proposal and an open preview. The viewport returns, all entities including Director-added ones render, the selection is kept, the preview is still usable, and the console is clean.
+- Semantic conflicts are fixed by their owners: `src/render/**` by Kilo Code, everything else by Kiro.
+
+**Verification evidence.**
+- Current (2026-11-18): `git merge-tree --write-tree` exit 0; auto-merged `src/main.ts` and `src/ui/shell.ts`; Kilo's diff read from git objects (+173/−5 lines in 4 files). No semantic tests run, because merging needs approval.
+- To close: integration branch commit, outputs of all four commands, and the context-loss browser test result.
+
+### WW-031 — World Morph design defaults need confirmation
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Malak (decision); Kiro (implementation) |
+| Target | 2026-11-22 |
+| Status | OPEN |
+
+**Description.** [WORLD_MORPH_PLAN.md](WORLD_MORPH_PLAN.md) section 2 proposes four defaults:
+- D-WM-1: a morph with any pin-rejected operation is rejected as a whole, not filtered;
+- D-WM-2: pinning also protects a pinned entity's ancestors from move, hide and remove, because transforms and visibility are inherited;
+- D-WM-3: adding children to a pinned entity is allowed;
+- D-WM-4: transitions last at most 1.2 s and are instant under reduced motion and in Performance mode.
+
+These are design choices that Master Plan v1.2 might settle differently (WW-023).
+
+**Acceptance criteria.**
+- Malak confirms or replaces each default, and the decision is recorded in `.kiro/steering/tech.md`.
+- If Master Plan v1.2 is supplied later and differs, a new issue is registered.
+
+**Verification evidence.**
+- Current (2026-11-18): defaults written in the plan; no decision recorded.
+- To close: commit recording the decision.
+
 ---
 
 ## Change log
@@ -778,3 +834,4 @@ operations itself (`src/director/translate.ts`, `isNoOp`).
 | 2026-11-18 | Phase 2 readiness: added WW-021 to WW-026. WW-020 moved to IN PROGRESS (new `WORLDWEAVER-WEBGL` worktree on Phase 1 code observed; checks unverified). No existing target dates changed. |
 | 2026-11-18 | Phase 2 started on `phase2/director`: WW-021 DONE (approval recorded). Added WW-027 (found by translator tests). No existing target dates changed. |
 | 2026-11-18 | Phase 2 Director implementation: WW-007, WW-010, WW-011, WW-012 and WW-027 DONE with evidence; WW-026 IN PROGRESS; WW-025 BLOCKED (needs a live run with Malak's key); evidence added to WW-015, WW-020 and WW-024. Added WW-028 and WW-029. No existing target dates changed. |
+| 2026-11-18 | Readiness: added WW-030 (integration risk; textual merge clean, semantic tests pending) and WW-031 (World Morph defaults). Evidence added to WW-001, WW-020 and WW-025; live-test runbook and World Morph plan written. No existing target dates changed. |

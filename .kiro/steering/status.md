@@ -56,6 +56,9 @@ upstream responses.
 | Browser acceptance suite (WW-010, WW-011) | DONE | `tests/e2e/director.spec.ts` | 3 consecutive 12/12 runs on `f8339e6`; 13/13 on `9c7d406` |
 | Live compatibility suite (WW-025) | Written; **BLOCKED** | `tests/live/director.live.test.ts` | Run without a key: BLOCKED, 0 calls |
 | Live smoke in the app (P2-08) | **BLOCKED** | — | Needs Malak's key |
+| Live-test runbook | DONE | `docs/LIVE_TEST_RUNBOOK.md` | Hidden key entry, 8 + 2 requests, expected output, failure codes |
+| Phase 2 / WebGL integration (WW-030) | **BLOCKED** (approval) | — | Textual trial merge clean (`git merge-tree` exit 0); semantic tests pending |
+| World Morph plan | PLAN ONLY | `docs/WORLD_MORPH_PLAN.md` | Starts after WW-025 review, WW-030 and WW-031 |
 
 Test totals at `9c7d406`: 225 unit tests passed, 0 failed, 0 skipped; 13
 browser tests passed; live suite 1 passed (the BLOCKED report) and 9 skipped

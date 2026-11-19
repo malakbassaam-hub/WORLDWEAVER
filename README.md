@@ -96,7 +96,8 @@ Health check (shows the mode and whether a key is configured, never the key):
 ## Known limitations
 
 - **Live Gemini output has not been verified yet** with the new proposal
-  schema. Run `npm run test:live` with your key to verify (WW-025).
+  schema. Follow [docs/LIVE_TEST_RUNBOOK.md](docs/LIVE_TEST_RUNBOOK.md) to
+  verify it with your key (WW-025).
 - Worlds are kept in memory only. Reloading the page resets to the Crystal
   Kingdom (WW-016).
 - Browser tests use software WebGL and take several minutes on a busy machine

@@ -236,6 +236,10 @@ until Master Plan v1.2 is supplied. None of these features is dropped or
 replaced.
 
 ### 10.1 World Morph with pinned-object preservation
+
+Superseded by the detailed plan in [WORLD_MORPH_PLAN.md](WORLD_MORPH_PLAN.md)
+(gates, ancestor protection, transition contract, ownership and tests). The
+summary below is kept for history.
 - A Morph prompt in the Director runs in a `morph` mode. Context marks pinned refs as immutable.
 - Enforcement is on the client, not trusted to the model: any operation targeting a pinned entity, or its pinned ancestors, is dropped with a reason.
 - Applied as one batch. Kilo Code may add a transition effect (renderer only).
