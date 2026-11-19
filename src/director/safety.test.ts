@@ -32,6 +32,7 @@ describe('director safety', () => {
       './context.ts',
       './controller.ts',
       './describe.ts',
+      './futures.ts',
       './index.ts',
       './morph.ts',
       './schema.ts',
