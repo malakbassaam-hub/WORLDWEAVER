@@ -25,12 +25,15 @@ const ERROR_TITLES: Readonly<Record<string, string>> = {
   FORBIDDEN_ORIGIN: 'Request refused',
   PROMPT_INVALID: 'Check your request',
   APPLY_REJECTED: 'Could not apply the proposal',
+  MORPH_DISABLED: 'World Morph is not enabled yet',
 };
 
 const PLACEHOLDERS: Readonly<Record<DirectorTask, string>> = {
   create: 'Describe what to add… e.g. "A crystal garden on the main isle, ringed by violet spires."',
   edit: 'Describe a change… e.g. "Bathe the sentinel spires in violet and raise two of them."',
 };
+
+const MORPH_PLACEHOLDER = 'Describe a whole-world restyle… e.g. "Make the kingdom darker and more apocalyptic." Pinned entities stay unchanged.';
 
 export interface DirectorPanelHooks {
   /** Called after a proposal is applied, with the entities it created or changed. */
@@ -46,11 +49,13 @@ export class DirectorPanel {
   private readonly counter: HTMLElement;
   private readonly generateBtn: HTMLButtonElement;
   private readonly taskButtons: Record<DirectorTask, HTMLButtonElement>;
+  private readonly morphBtn: HTMLElement | null;
   private readonly status: HTMLElement;
   private readonly modeNote: HTMLElement;
   private countdown = 0;
   private lastStatus: DirectorState['status'] | null = null;
   private lastPreviewKey: string | null = null;
+  private isMorphMode = false;
 
   constructor(
     private readonly controller: DirectorController,
@@ -67,6 +72,9 @@ export class DirectorPanel {
         on: { click: () => this.controller.setTask(t) },
       });
     this.taskButtons = { create: task('create', 'Create'), edit: task('edit', 'Edit') };
+    this.morphBtn = controller.isMorphEnabled()
+      ? h('button', { class: 'ww-seg-btn', text: 'Morph', attrs: { type: 'button', role: 'button', 'aria-label': 'World Morph: restyle the whole world with pinned-entity protection' }, on: { click: () => this.submitMorph() } })
+      : null;
 
     this.prompt = h('textarea', {
       class: 'ww-director-input',
@@ -106,6 +114,7 @@ export class DirectorPanel {
       [
         h('header', { class: 'ww-panel-head' }, [h('h2', {}, [icon('spark'), h('span', { text: 'AI World Director' })]), this.badge]),
         h('div', { class: 'ww-seg', attrs: { role: 'radiogroup', 'aria-label': 'Director task' } }, [this.taskButtons.create, this.taskButtons.edit]),
+        this.morphBtn ? h('div', { class: 'ww-morph-row' }, [this.morphBtn]) : null,
         h('label', { class: 'ww-sr-only', text: 'Request', attrs: { for: 'ww-director-prompt' } }),
         this.prompt,
         h('div', { class: 'ww-director-row' }, [this.counter, this.generateBtn]),
@@ -128,7 +137,15 @@ export class DirectorPanel {
 
   private submit(): void {
     if (this.controller.isBusy()) return; // duplicate submissions are ignored
-    void this.controller.generate(this.prompt.value);
+    if (this.isMorphMode) {
+      void this.controller.generateMorph(this.prompt.value);
+    } else {
+      void this.controller.generate(this.prompt.value);
+    }
+  }
+
+  private submitMorph(): void {
+    this.isMorphMode = true;
   }
 
   private render(s: DirectorState): void {
@@ -164,19 +181,22 @@ export class DirectorPanel {
 
   private updateControls(s: DirectorState): void {
     const busy = s.status === 'loading';
-    for (const [t, btn] of Object.entries(this.taskButtons) as Array<[DirectorTask, HTMLButtonElement]>) {
+    for (const [t, btn] of Object.entries(this.taskButtons)) {
       const on = s.task === t;
       btn.setAttribute('aria-checked', String(on));
       btn.classList.toggle('is-active', on);
       btn.disabled = busy;
     }
-    this.prompt.placeholder = PLACEHOLDERS[s.task];
+    this.prompt.placeholder = this.isMorphMode ? MORPH_PLACEHOLDER : PLACEHOLDERS[s.task];
     this.prompt.readOnly = busy;
     const length = this.prompt.value.trim().length;
     this.counter.textContent = `${this.prompt.value.length} / ${PROMPT_MAX_CHARS}`;
     const waiting = s.status === 'error' && s.error?.retryAt !== null && (s.error?.retryAt ?? 0) > Date.now();
-    this.generateBtn.disabled = busy || length === 0 || waiting || s.health.mode === 'offline';
+    const morphDisabled = this.isMorphMode && !this.controller.isMorphEnabled();
+    this.generateBtn.disabled = busy || length === 0 || waiting || s.health.mode === 'offline' || morphDisabled;
     this.generateBtn.setAttribute('aria-busy', String(busy));
+    if (morphDisabled) this.generateBtn.title = 'World Morph is not enabled yet (WW-031).';
+    else this.generateBtn.setAttribute('title', 'Generate a proposal (Ctrl+Enter)');
   }
 
   private renderStatus(s: DirectorState): void {
@@ -232,6 +252,7 @@ export class DirectorPanel {
       .filter(Boolean)
       .join(' · ');
     const blocked = !t.applicable;
+    const isMorph = p.kind === 'morph';
     const apply = h('button', {
       class: 'ww-btn is-primary',
       attrs: { type: 'button', 'data-action': 'apply', ...(blocked || p.stale ? { disabled: '' } : {}) },
@@ -246,15 +267,18 @@ export class DirectorPanel {
       },
     }, [h('span', { text: 'Apply' })]);
 
-    return h('div', { class: `ww-director-card is-preview${blocked ? ' is-blocked' : ''}` }, [
+    const morphInfo = isMorph ? this.morphPreviewInfo(t as any) : null;
+
+    return h('div', { class: `ww-director-card is-preview${blocked ? ' is-blocked' : ''}${isMorph ? ' is-morph' : ''}` }, [
       h('div', { class: 'ww-card-head' }, [
-        h('p', { class: 'ww-card-title', text: 'Proposal preview' }),
+        h('p', { class: 'ww-card-title', text: isMorph ? 'World Morph preview' : 'Proposal preview' }),
         h('span', { class: `ww-chip ${p.mode === 'live' ? 'is-live' : 'is-recorded'}`, text: p.mode === 'live' ? 'LIVE · Gemini' : 'RECORDED · not live AI' }),
       ]),
       h('p', { class: 'ww-note', text: 'Nothing has changed yet. Review, then Apply or Discard.' }),
       p.mode === 'recorded' && p.recordingLabel ? h('p', { class: 'ww-note', text: `Recording: ${p.recordingLabel}` }) : null,
       h('p', { class: 'ww-proposal-summary', text: t.display.summary, attrs: { dir: 'auto' } }),
       h('p', { class: 'ww-proposal-stats', text: stats }),
+      morphInfo,
       h(
         'ol',
         { class: 'ww-op-list', attrs: { 'aria-label': 'Proposed operations' } },
@@ -280,6 +304,35 @@ export class DirectorPanel {
         h('button', { class: 'ww-btn', text: 'Discard', attrs: { type: 'button', 'data-action': 'discard' }, on: { click: () => this.controller.discard() } }),
       ]),
     ]);
+  }
+
+  private morphPreviewInfo(t: { pinned: readonly string[]; protectedAncestors: readonly string[]; pinRejections: number; violations: readonly { readonly id: string; readonly kind: string; readonly message: string }[]; blockedReason?: string; policyApproved: boolean }): HTMLElement {
+    const items: Array<string | HTMLElement> = [];
+    if (t.pinned.length > 0) {
+      items.push(h('p', { class: 'ww-note', text: `Pinned entities (never animated): ${t.pinned.map((id) => `“${id}”`).join(', ')}` }));
+    }
+    if (t.protectedAncestors.length > 0) {
+      items.push(h('p', { class: 'ww-note', text: `Protected ancestors: ${t.protectedAncestors.map((id) => `“${id}”`).join(', ')}` }));
+    }
+    if (t.blockedReason) {
+      items.push(h('p', { class: 'ww-warn', text: t.blockedReason }));
+    }
+    if (t.violations.length > 0) {
+      const violationItems = t.violations.map((v) =>
+        h('li', {}, [h('code', { text: v.kind }), h('span', { text: ` ${v.message}` })]),
+      );
+      items.push(
+        h('div', { class: 'ww-warn' }, [
+          h('p', { text: 'Pinned protection violations:' }),
+          h('ul', { class: 'ww-issue-list' }, violationItems),
+        ]),
+      );
+    }
+    if (!t.policyApproved) {
+      items.push(h('p', { class: 'ww-note', text: 'Morph policy is proposed but not yet approved (WW-031).' }));
+    }
+    if (items.length === 0) return h('div');
+    return h('div', { class: 'ww-morph-info' }, items);
   }
 
   private errorCard(s: DirectorState): HTMLElement {

@@ -43,11 +43,13 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     stdout: 'pipe',
-    env: {
-      DIRECTOR_MODE: 'recorded',
-      GEMINI_API_KEY: '',
-      DIRECTOR_RECORDED_LATENCY_MS: '1500',
-      VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true',
-    },
+      env: {
+        DIRECTOR_MODE: 'recorded',
+        GEMINI_API_KEY: '',
+        DIRECTOR_RECORDED_LATENCY_MS: '1500',
+        VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true',
+        DIRECTOR_MORPH: '1',
+        VITE_DIRECTOR_MORPH: '1',
+      },
   },
 });

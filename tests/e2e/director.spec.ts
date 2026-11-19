@@ -37,6 +37,7 @@ const prompt = (page: Page) => page.locator('#ww-director-prompt');
 const generate = (page: Page) => page.locator('.ww-generate');
 const card = (page: Page, kind: string) => page.locator(`.ww-director-card.is-${kind}`);
 const action = (page: Page, name: string) => page.locator(`.ww-director [data-action="${name}"]`);
+const morphBtn = (page: Page) => page.locator('.ww-morph-row .ww-seg-btn');
 
 /**
  * Holds POST /api/director requests in the browser until `release()`, so the
@@ -293,5 +294,107 @@ test.describe('AI World Director (recorded mode)', () => {
     const panel = await page.locator('.ww-director').boundingBox();
     expect(badge!.y).toBeGreaterThanOrEqual(panel!.y - 1);
     await page.screenshot({ path: info.outputPath('director-preview.png'), timeout: 60_000 });
+  });
+});
+
+test.describe('World Morph (recorded mode)', () => {
+  // The Aurelion Citadel is pinned by default (crystalKingdom.ts:95); no need to pin it.
+
+  test('run a recorded morph, Apply: pinned citadel unchanged, others changed', async ({ page }) => {
+    const log = await openStudio(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('violet dusk');
+    await generate(page).click();
+    const preview = card(page, 'preview');
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('World Morph preview');
+    await expect(preview).toContainText('Pinned entities');
+    await expect(preview).toContainText('Morph policy is proposed but not yet approved (WW-031).');
+    await expect(action(page, 'apply')).toBeEnabled();
+    await action(page, 'apply').click();
+    await expect(card(page, 'applied')).toBeVisible();
+    // The citadel row still exists with its original name (pinned entity preserved).
+    await expect(page.locator('.ww-tree-row', { hasText: 'Aurelion Citadel' })).toBeVisible();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('one undo restores the morph; redo restores it again', async ({ page }) => {
+    const log = await openStudio(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('violet dusk');
+    await generate(page).click();
+    await expect(card(page, 'preview')).toBeVisible();
+    await action(page, 'apply').click();
+    await expect(card(page, 'applied')).toBeVisible();
+    // Exactly one undo step is available; undo disables Undo, redo re-enables it.
+    await expect(page.locator('.ww-topbar [aria-label="Undo"]')).toBeEnabled();
+    await page.locator('.ww-topbar [aria-label="Undo"]').click();
+    await expect(page.locator('.ww-topbar [aria-label="Undo"]')).toBeDisabled();
+    await page.locator('.ww-topbar [aria-label="Redo"]').click();
+    await expect(page.locator('.ww-topbar [aria-label="Undo"]')).toBeEnabled();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('morph moving a pinned entity ancestor: preview shows named reason, Apply disabled, world unchanged', async ({ page }) => {
+    const log = await openStudio(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('lift the isle');
+    await generate(page).click();
+    const preview = card(page, 'preview');
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('World Morph preview');
+    // The morph moves the citadel's ancestor (Isle of Aurelion), so it is blocked.
+    await expect(preview.locator('.ww-op.is-rejected')).not.toHaveCount(0);
+    await expect(preview).toContainText('ancestor');
+    await expect(action(page, 'apply')).toBeDisabled();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('cancel during a morph: the late response is ignored', async ({ page }) => {
+    const log = await openStudio(page);
+    const hold = await holdDirector(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('violet dusk');
+    await generate(page).click();
+    await expect(card(page, 'loading')).toBeVisible();
+    await action(page, 'cancel').click();
+    await expect(card(page, 'loading')).toHaveCount(0);
+    hold.release();
+    await page.waitForTimeout(2500);
+    await expect(card(page, 'preview')).toHaveCount(0);
+    await expect(page.locator('.ww-tree-row .ww-tree-name')).toHaveCount(27);
+    expect(log.errors).toEqual([]);
+  });
+
+  test('stale preview after a manual edit, then Refresh, then Apply', async ({ page }) => {
+    const log = await openStudio(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('violet dusk');
+    await generate(page).click();
+    await expect(card(page, 'preview')).toBeVisible();
+    // Make a manual change to an entity NOT in the morph operations, to stale the preview.
+    await page.locator('.ww-tree-row', { hasText: 'Lumen Wisp of Embers' }).first().click();
+    await page.locator('.ww-swatch[aria-label="Apply Night Violet"]').click();
+    await expect(card(page, 'preview')).toContainText('The world changed after this preview was made');
+    await expect(action(page, 'apply')).toBeDisabled();
+    await action(page, 'refresh').click();
+    await expect(action(page, 'apply')).toBeEnabled();
+    await action(page, 'apply').click();
+    await expect(card(page, 'applied')).toBeVisible();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('reduced motion: the morph change is instant', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    const log = await openStudio(page);
+    await morphBtn(page).click();
+    await prompt(page).fill('violet dusk');
+    await generate(page).click();
+    await expect(card(page, 'preview')).toBeVisible();
+    await action(page, 'apply').click();
+    await expect(card(page, 'applied')).toBeVisible();
+    // No transition UI should block; applied state appears immediately.
+    await expect(page.locator('.ww-director-card.is-applied')).toBeVisible();
+    expect(log.errors).toEqual([]);
   });
 });

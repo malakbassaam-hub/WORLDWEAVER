@@ -11,23 +11,7 @@ import { disposeSharedTextures } from './textures';
 
 export type QualityMode = 'cinematic' | 'performance';
 
-// ============================================================================
-// World Morph transition interface (renderer side, Kilo Code)
-//
-// Matches the contract in src/core/presentation.ts (Kiro, not yet created).
-// When Kiro creates presentation.ts, this local type should be replaced by an
-// import from ../core/presentation and this file's methods kept in sync.
-// ============================================================================
-
-/** A single morph batch: state before, state after, and what changed. */
-export interface MorphTransition {
-  readonly kind: 'morph';
-  readonly before: World;
-  readonly after: World;
-  readonly changed: readonly EntityId[];
-  readonly pinned: readonly EntityId[]; // never animated
-  readonly maxDurationMs: number;       // 1200 (design default D-WM-4)
-}
+import type { WorldTransition } from '../core/presentation';
 
 interface MorphTween {
   readonly id: EntityId;
@@ -630,7 +614,7 @@ export class SceneRenderer {
    *   - If `cancel()` is called, the frame after must match `after`.
    *   - No new GPU resources survive the transition; dispose() cleans up.
    */
-  public async playTransition(transition: MorphTransition): Promise<void> {
+  public async playTransition(transition: WorldTransition): Promise<void> {
     // World state is the truth: sync first, always correct.
     this.sync(transition.after);
 

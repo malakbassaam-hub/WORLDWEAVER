@@ -3,6 +3,8 @@ import { applyEvent } from './core/reducer';
 import { WorldStore } from './core/store';
 import type { EntityId, WorldEventBody } from './core/types';
 import { SceneRenderer, WebGLUnavailableError } from './render/SceneRenderer';
+import { buildMorphTransition, createTransitionCoordinator } from './core/presentation';
+import { pinClosure } from './director/morph';
 import { fetchHealth, requestProposal } from './director/client';
 import { DirectorController } from './director/controller';
 import type { StudioActions } from './ui/actions';
@@ -26,6 +28,10 @@ function boot(host: HTMLElement) {
   const selection = new SelectionModel();
   let renderer: SceneRenderer | null = null;
 
+  // World Morph is disabled until WW-031 (Malak's approval) and WW-025 (live Gemini review).
+  // The recorded-mode demonstration remains accessible through the VITE_DIRECTOR_MORPH env flag.
+  const MORPH_ENABLED = import.meta.env.VITE_DIRECTOR_MORPH === '1' || import.meta.env.VITE_DIRECTOR_MORPH === 'true';
+
   const shell = new StudioShell(host, genesis, {
     undo: () => actions.undo(),
     redo: () => actions.redo(),
@@ -42,8 +48,6 @@ function boot(host: HTMLElement) {
     store,
     selection,
     edit(event: WorldEventBody) {
-      // UI no-ops (e.g. clicking the already-active swatch) are not dispatched
-      // at all, so they never appear in the timeline or history (WW-027).
       const probe = applyEvent(store.getState(), { ...event, source: 'user' });
       if (!probe.ok && probe.reason === 'No change.') {
         if ('id' in event) renderer?.revertPreview(event.id);
@@ -89,6 +93,7 @@ function boot(host: HTMLElement) {
     store,
     request: (body, signal) => requestProposal(body, { signal }),
     health: (signal) => fetchHealth({ signal }),
+    morph: { enabled: MORPH_ENABLED },
   });
   const directorPanel = new DirectorPanel(director, store, {
     onApplied: (entityIds, label) => {
@@ -109,13 +114,31 @@ function boot(host: HTMLElement) {
   shell.right.append(inspector.element);
   shell.bottom.append(timeline.element);
 
+  const render = () => {
+    const world = store.getState();
+    renderer?.sync(world);
+    renderer?.setSelection(selection.get());
+    hierarchy.update(world);
+    inspector.update(world);
+    timeline.update(world, store.getLog());
+    shell.setHistory(store.canUndo(), store.canRedo());
+  };
+
+  // World Morph transition coordinator (renderer side, Kilo Code).
+  // Wired per docs/world-morph/KILO_HANDOFF.md §2b. Assigned after the
+  // renderer exists so the presenter is wired immediately.
+  let transitions: ReturnType<typeof createTransitionCoordinator> | null = null;
+
   try {
     renderer = new SceneRenderer(
       shell.viewport,
       {
         onSelect: (id) => actions.select(id),
         onHover: (id, x, y) => shell.showTooltip(id ? (store.getState().entities[id]?.name ?? null) : null, x, y),
-        onContextLost: () => shell.showFallback('The 3D context was lost', 'The GPU reset or ran out of memory. The viewport will restore automatically.'),
+        onContextLost: () => {
+          shell.showFallback('The 3D context was lost', 'The GPU reset or ran out of memory. The viewport will restore automatically.');
+          transitions?.cancel();
+        },
         onContextRestored: () => {
           if (!renderer) return;
           renderer.sync(store.getState());
@@ -127,71 +150,85 @@ function boot(host: HTMLElement) {
       genesis.seed,
     );
     shell.setQualityLabel(renderer.getQuality());
+
+    transitions = createTransitionCoordinator(
+      { play: (t) => renderer!.playTransition(t), cancel: () => renderer!.cancelTransition() },
+      {
+        reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+        performanceMode: () => renderer!.getQuality() === 'performance',
+      },
+    );
+
+    let previous = store.getState();
+    const unsubscribeStore = store.subscribe((world, log) => {
+      const id = selection.get();
+      if (id && !store.getState().entities[id]) selection.set(null);
+      const entry = log.at(-1);
+      if (entry?.kind === 'batch' && entry.ok && entry.meta?.details?.kind === 'morph' && entry.events) {
+        void transitions!.play(buildMorphTransition(previous, world, entry.events, pinClosure(previous).pinned));
+      } else {
+        transitions!.cancel(); // undo, redo, any edit or rejected entry
+      }
+      previous = world;
+      render();
+    });
+    const unsubscribeSelection = selection.subscribe((id) => renderer?.setSelection(id));
+    render();
+
+    const onKey = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target)) return;
+      const mod = event.ctrlKey || event.metaKey;
+      const key = event.key.toLowerCase();
+      if (mod && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) actions.redo();
+        else actions.undo();
+      } else if (mod && key === 'y') {
+        event.preventDefault();
+        actions.redo();
+      } else if (!mod && key === 'escape') {
+        actions.select(null);
+      } else if (!mod && key === 'f') {
+        const id = selection.get();
+        if (id) actions.focus(id);
+      } else if (!mod && key === 'home') {
+        actions.resetCamera();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+
+    const statsTimer = window.setInterval(() => {
+      if (!renderer) return;
+      const s = renderer.getStats();
+      shell.setStats(`${s.fps} fps · ${s.drawCalls} draws · ${(s.triangles / 1000).toFixed(0)}k tris · ${s.entities} entities`);
+    }, 500);
+
+    requestAnimationFrame(() => requestAnimationFrame(() => shell.ready()));
+
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.clearInterval(statsTimer);
+      directorPanel.dispose();
+      director.dispose();
+      unsubscribeStore();
+      unsubscribeSelection();
+      renderer?.dispose();
+      host.replaceChildren();
+    };
   } catch (error) {
     renderer = null;
     const message = error instanceof WebGLUnavailableError ? error.message : `The renderer failed to start: ${(error as Error).message}`;
     shell.showFallback('3D viewport unavailable', message);
     shell.setQualityLabel('unavailable');
     console.error(error);
-  }
-
-  const render = () => {
-    const world = store.getState();
-    renderer?.sync(world);
-    renderer?.setSelection(selection.get());
-    hierarchy.update(world);
-    inspector.update(world);
-    timeline.update(world, store.getLog());
-    shell.setHistory(store.canUndo(), store.canRedo());
-  };
-  const unsubscribeStore = store.subscribe(() => {
-    const id = selection.get();
-    if (id && !store.getState().entities[id]) selection.set(null);
+    // Still render without a renderer so panels work.
     render();
-  });
-  const unsubscribeSelection = selection.subscribe((id) => renderer?.setSelection(id));
-  render();
-
-  const onKey = (event: KeyboardEvent) => {
-    if (isTypingTarget(event.target)) return;
-    const mod = event.ctrlKey || event.metaKey;
-    const key = event.key.toLowerCase();
-    if (mod && key === 'z') {
-      event.preventDefault();
-      if (event.shiftKey) actions.redo();
-      else actions.undo();
-    } else if (mod && key === 'y') {
-      event.preventDefault();
-      actions.redo();
-    } else if (!mod && key === 'escape') {
-      actions.select(null);
-    } else if (!mod && key === 'f') {
-      const id = selection.get();
-      if (id) actions.focus(id);
-    } else if (!mod && key === 'home') {
-      actions.resetCamera();
-    }
-  };
-  window.addEventListener('keydown', onKey);
-
-  const statsTimer = window.setInterval(() => {
-    if (!renderer) return;
-    const s = renderer.getStats();
-    shell.setStats(`${s.fps} fps · ${s.drawCalls} draws · ${(s.triangles / 1000).toFixed(0)}k tris · ${s.entities} entities`);
-  }, 500);
-
-  requestAnimationFrame(() => requestAnimationFrame(() => shell.ready()));
-
-  return () => {
-    window.removeEventListener('keydown', onKey);
-    window.clearInterval(statsTimer);
-    directorPanel.dispose();
-    director.dispose();
-    unsubscribeStore();
-    unsubscribeSelection();
-    renderer?.dispose();
-    host.replaceChildren();
-  };
+    return () => {
+      directorPanel.dispose();
+      director.dispose();
+      host.replaceChildren();
+    };
+  }
 }
 
 const host = document.getElementById('app');
