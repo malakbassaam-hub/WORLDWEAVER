@@ -1,16 +1,30 @@
 # World Morph — Implementation Status
 
-Branch: `phase3/world-morph` (from `phase2/director` at `3139171`).
-Worktree: `C:\Users\user\WORLDWEAVER-MORPH`. Last updated: 2026-11-18.
+Branch: `phase3/world-morph` (from `phase2/director` at `3139171`), continued
+on `phase4/ledger-futures`. Last updated: 2026-11-19.
 
 **World Morph is implemented and unit-tested, but NOT enabled anywhere.**
-Its gates in [../WORLD_MORPH_PLAN.md](../WORLD_MORPH_PLAN.md) are not met:
+Its gates in [../WORLD_MORPH_PLAN.md](../WORLD_MORPH_PLAN.md):
 
 | Gate | Status |
 |---|---|
 | Live Gemini results reviewed (WW-025) | **BLOCKED**: needs Malak's key |
 | Phase 2 / WebGL integration branch green (WW-030) | In progress (Kilo Code) |
-| Design defaults D-WM-1 to D-WM-4 confirmed (WW-031) | **Not approved**: implemented as a configurable policy marked `approved: false` |
+| Design defaults confirmed (WW-031) | **Approved by Malak on 2026-11-19 for D-WM-1 to D-WM-3** (policies A, B, C below). D-WM-4 (transition length, 1200 ms) was not part of the approval and is still a proposal |
+
+### WW-031 approved policy (2026-11-19)
+
+| Policy | Rule | Implementation |
+|---|---|---|
+| A, D-WM-1 | A morph that would modify an existing pinned entity is rejected as a whole | `onPinViolation: 'reject-proposal'` |
+| B, D-WM-2 | Ancestors of pinned entities are protected against changes that would affect the pinned descendant, including inherited position and visibility | `protectAncestors: true` plus `checkPinnedInvariant` (pose and visibility) |
+| C, D-WM-3 | New children may be added under pinned entities while the pinned entity's data, world position and visibility stay unchanged | `allowAddToPinned: true` plus `checkPinnedInvariant` |
+
+`APPROVED_MORPH_POLICY` (renamed from `PROPOSED_MORPH_POLICY`) holds these
+values, and `MORPH_POLICY_STATUS.approved` is `true`. The behaviour did not
+change: the implemented proposal already matched the approved policy, so the
+change records the approval and adds tests (`morph.policy.test.ts`, 10 tests).
+The approval does not enable World Morph.
 
 ## What is implemented
 
@@ -44,12 +58,12 @@ Its gates in [../WORLD_MORPH_PLAN.md](../WORLD_MORPH_PLAN.md) are not met:
   preview. It is re-checked in `applyMorph`.
 - **All-or-nothing:** non-pin rejections (unknown refs, invalid values, no-ops)
   always block a morph. Pin rejections block it under `reject-proposal`
-  (proposed default) or are dropped and listed under `drop-operation`.
+  (approved default) or are dropped and listed under `drop-operation`.
 - **One undo step** per morph (`dispatchBatch`); redo restores identical
   objects; `replayLog` reproduces sessions with morphs exactly and never calls
   Gemini.
 - **Batch details** (Causal Ledger input): `kind: 'morph'`, `pinnedCount`,
-  `pinnedHash`, `policy`, `policyApproved: 'false'`, `pinRejections`,
+  `pinnedHash`, `policy`, `policyApproved: 'true'`, `pinRejections`,
   `proposalKey`, `mode`, and `model`, `requestId` or `recordingId` when known.
   No prompt text.
 - **Off by default:** the browser controller refuses with `MORPH_DISABLED`
@@ -71,9 +85,9 @@ Its gates in [../WORLD_MORPH_PLAN.md](../WORLD_MORPH_PLAN.md) are not met:
 
 | Feature | What exists | What does NOT exist |
 |---|---|---|
-| Causal Ledger | `src/core/ledger.ts`: reference projection of the store log; exact effects; undo/redo targets; `explainEntity` | Hash chain, persistence, UI |
-| Parallel Futures | `src/core/futures.ts`: snapshot refs, deterministic restore, independent fork, compare | BranchManager service, persistence, timeline UI, viewport comparison |
-| Living Characters | `src/director/characters.ts`: turn admission (reply plus proposal through the standard validator, never applied) and grounded memories | Character archetype, talk UI, proxy task, memory persistence, model calls |
+| Causal Ledger | Implemented as domain logic on `phase4/ledger-futures` (see [../ledger-futures/IMPLEMENTATION_STATUS.md](../ledger-futures/IMPLEMENTATION_STATUS.md)) | Persistence, SHA-256 chain, UI |
+| Parallel Futures | Implemented as domain logic on `phase4/ledger-futures` | Persistence, panel UI, viewport preview |
+| Living Characters | `src/director/characters.ts`: turn admission (reply plus proposal through the standard validator, never applied), log- and ledger-grounded memories | Character archetype, talk UI, proxy task, memory persistence, model calls |
 
 Designs: [../architecture/CAUSAL_LEDGER.md](../architecture/CAUSAL_LEDGER.md),
 [../architecture/PARALLEL_FUTURES.md](../architecture/PARALLEL_FUTURES.md),
@@ -93,6 +107,7 @@ Designs: [../architecture/CAUSAL_LEDGER.md](../architecture/CAUSAL_LEDGER.md),
 ## Ready for a browser demonstration?
 
 - **Phase 2 Director (Create and Edit, recorded mode): yes**, unchanged.
-- **World Morph: no.** It needs the WW-031 decision, a Morph task in
-  `src/ui/director.ts` (Kiro), and the integration hooks in
-  [KILO_HANDOFF.md](KILO_HANDOFF.md).
+- **World Morph: no.** WW-031 is now approved (policies A to C), but it still
+  needs a Morph task in `src/ui/director.ts` (Kiro), the integration hooks in
+  [KILO_HANDOFF.md](KILO_HANDOFF.md), the WW-030 integration and the WW-025
+  live review.

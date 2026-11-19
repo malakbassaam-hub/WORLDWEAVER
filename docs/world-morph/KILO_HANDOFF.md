@@ -36,13 +36,13 @@ Rules: `sync(after)` has already run and stays the truth; animate only
 after `cancelTransition()` the next frame equals `after`; no GPU resources
 outlive the transition; `dispose()` during a transition is safe.
 
-### 2b. Studio wiring (`src/main.ts`, after WW-031 approval)
+### 2b. Studio wiring (`src/main.ts`; WW-031 approved 2026-11-19)
 
 ```ts
 import { buildMorphTransition, createTransitionCoordinator } from './core/presentation';
 import { pinClosure } from './director/morph';
 
-const MORPH_ENABLED = false; // flip only after WW-031 is approved
+const MORPH_ENABLED = false; // flip only after WW-025 is reviewed and WW-030 is green
 
 const director = new DirectorController({
   store,
@@ -97,7 +97,7 @@ UI:
 
 ## 4. What Kiro still owns and will do next
 
-- Morph task in `src/ui/director.ts` and its styles (after WW-031).
+- Morph task in `src/ui/director.ts` and its styles (WW-031 approved; not started).
 - One live morph case in `tests/live` (the 9th request; after the WW-025 review).
 - Register and schedule updates, once the shared documents are not being
   edited elsewhere ([REGISTER_AND_SCHEDULE_DELTA.md](REGISTER_AND_SCHEDULE_DELTA.md)).
