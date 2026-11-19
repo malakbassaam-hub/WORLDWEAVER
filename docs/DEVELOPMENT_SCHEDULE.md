@@ -55,6 +55,7 @@ register issues, whose target dates are unchanged from the previous schedule.
 | 2026-11-20 | Kiro | Schema v2 and validator with fixtures and unit tests | P2-01 | — |
 | 2026-11-20 | Kiro | Fix preview leakage; stop full re-renders on rejected events; re-run console check | WW-005, WW-006, WW-011 | — |
 | 2026-11-20 | Malak | Approve creating `integration/phase2-webgl`: Kilo's `phase1.5/webgl-recovery` merged into a copy of `phase2/director`, with `main` untouched | WW-030 | — |
+| 2026-11-20 | Kilo Code | Rewrite the WebGL branch `.gitignore` as UTF-8 (two UTF-16 lines); stop editing Kiro-owned config, and move Playwright changes to a review request | WW-032 | — |
 | 2026-11-21 | Kiro | Write the v2 live preflight script (header-based key; existing script untouched); translator with deterministic IDs and layout | P2-02, P2-03, WW-024 | P2-01 |
 | 2026-11-21 | Malak | Run the v2 live preflight (at most 9 calls) | WW-025 | P2-02 |
 | 2026-11-21 | Kilo Code | WebGL context-loss recovery; verify WebGL-unavailable fallback; bloom capability check and fallback | WW-001, WW-002, WW-003 | WW-020 |
@@ -99,7 +100,7 @@ register issues, whose target dates are unchanged from the previous schedule.
 | Date | Main focus | Who |
 |---|---|---|
 | 2026-11-19 | Live Gemini test and smoke test (runbook); Kilo worktree checks | Malak, Kilo Code |
-| 2026-11-20 | Approve the integration branch; preview-leak and redundant-render fixes | Malak, Kiro |
+| 2026-11-20 | Approve the integration branch; Kilo fixes `.gitignore` encoding; preview-leak and redundant-render fixes | Malak, Kilo Code, Kiro |
 | 2026-11-21 | Integration branch green; live results reviewed (World Morph gate) | Kiro, Kilo Code, Malak |
 | 2026-11-22 | World Morph defaults; WM-01 and WM-02 | Malak, Kiro |
 | 2026-11-23 | WM-03 and WM-04 | Kiro |

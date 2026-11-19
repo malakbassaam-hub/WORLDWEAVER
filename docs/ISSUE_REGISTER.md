@@ -58,8 +58,9 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-029 | Browser suite is slow and contends with other agents on a shared machine | Low | Kiro | 2026-11-25 | OPEN |
 | WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | BLOCKED (approval) |
 | WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN |
+| WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | OPEN |
 
-**Totals:** 31 issues. Critical 1, High 7, Medium 14, Low 9. OPEN 10, BLOCKED 13, IN PROGRESS 2, DONE 6.
+**Totals:** 32 issues. Critical 1, High 7, Medium 15, Low 9. OPEN 11, BLOCKED 13, IN PROGRESS 2, DONE 6.
 
 ---
 
@@ -789,15 +790,19 @@ operations itself (`src/director/translate.ts`, `isNoOp`).
 - Kilo's branch has not run the Phase 2 browser suite, and Phase 2 has not run with Kilo's renderer changes.
 - Kilo's note that no browser tool exists is out of date: Playwright is on `phase2/director`, so WW-001 can be verified with a real `WEBGL_lose_context` test.
 
+**Update (2026-11-18, later the same day).** Kilo Code pushed `116e97f` ("feat: WebGL context-loss recovery for renderer resilience") on top of `c582edf`. The trial merge is **no longer textually clean**: `git merge-tree` exits 1 with conflicts in `.gitignore` (treated as binary, see WW-032), `package.json`, `package-lock.json` and `playwright.config.ts` (both branches added one; add/add). `src/main.ts` and `src/ui/shell.ts` still auto-merge. Kilo's branch now also adds `tests/browser/webgl-recovery.test.ts`, a second Playwright setup (`testDir: 'tests/browser'`, `baseURL` port 4173, HTML reporter, `test:browser` script) and a redundant `playwright` dependency next to `@playwright/test`.
+
 **Acceptance criteria.**
 - Malak approves an integration branch, for example `integration/phase2-webgl`, created from `phase2/director` with `origin/phase1.5/webgl-recovery` merged in. Neither `main` nor the source branches are changed.
 - On that branch, `npm run typecheck`, `npm test`, `npm run build` and `npm run test:e2e` (3 consecutive runs) pass.
 - A new browser test forces `WEBGL_lose_context` loss and restore while the Director has an applied proposal and an open preview. The viewport returns, all entities including Director-added ones render, the selection is kept, the preview is still usable, and the console is clean.
 - Semantic conflicts are fixed by their owners: `src/render/**` by Kilo Code, everything else by Kiro.
+- Conflict resolution rules (configuration is Kiro-owned): keep Phase 2's UTF-8 `.gitignore`, which already ignores `test-results/` and `playwright-report/`; keep one `@playwright/test` dependency and drop the redundant `playwright` package; keep one Playwright config with Phase 2's recorded-mode web server and two projects, `e2e` (`tests/e2e`) and `browser` (Kilo's `tests/browser`); keep one script, `test:e2e`, running both projects; regenerate `package-lock.json` with `npm install` and do not hand-merge it.
 
 **Verification evidence.**
 - Current (2026-11-18): `git merge-tree --write-tree` exit 0; auto-merged `src/main.ts` and `src/ui/shell.ts`; Kilo's diff read from git objects (+173/−5 lines in 4 files). No semantic tests run, because merging needs approval.
 - To close: integration branch commit, outputs of all four commands, and the context-loss browser test result.
+- Current (2026-11-18, re-check against `116e97f`): `git merge-tree --write-tree` exit 1; result tree `67c162c`; 4 conflicting files, 2 auto-merged. Read from git objects only; Kilo's worktree was not touched.
 
 ### WW-031 — World Morph design defaults need confirmation
 
@@ -824,6 +829,26 @@ These are design choices that Master Plan v1.2 might settle differently (WW-023)
 - Current (2026-11-18): defaults written in the plan; no decision recorded.
 - To close: commit recording the decision.
 
+### WW-032 — WebGL branch .gitignore has UTF-16 lines
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Kilo Code (on `phase1.5/webgl-recovery`); Kiro if it is resolved during integration (WW-030) |
+| Target | 2026-11-20 |
+| Status | OPEN |
+
+**Description.** On `phase1.5/webgl-recovery` (`116e97f`) the `.gitignore` blob (`470ccac`) is 2,432 bytes and contains 35 NUL bytes, starting at byte 2,363. The original rules are intact ASCII, including `.env`, `*.pem`, `*.key`, `secrets/`, `credentials/`, `node_modules/` and `dist/`. The last two lines, `test-results/` and `playwright-report/`, were appended as UTF-16 (the default encoding of `>>` in Windows PowerShell 5.1). Effects: git does not recognise those two patterns, so Playwright output, including screenshots, could be committed on that branch; and git treats the whole file as binary, which causes the WW-030 merge conflict.
+
+**Acceptance criteria.**
+- `.gitignore` on the branch is plain UTF-8 or ASCII with no NUL bytes, or the integration branch takes Phase 2's `.gitignore`.
+- `git check-ignore -v test-results/x playwright-report/x .env` matches all three paths on the resulting branch.
+- No Playwright output is tracked on the branch: `git ls-files test-results playwright-report` prints nothing.
+
+**Verification evidence.**
+- Current (2026-11-18): byte inspection of the blob via `git show` (read-only); NUL region decodes as UTF-16 `test-results/` and `playwright-report/`.
+- To close: the byte check showing 0 NUL bytes, plus the `git check-ignore` output.
+
 ---
 
 ## Change log
@@ -835,3 +860,4 @@ These are design choices that Master Plan v1.2 might settle differently (WW-023)
 | 2026-11-18 | Phase 2 started on `phase2/director`: WW-021 DONE (approval recorded). Added WW-027 (found by translator tests). No existing target dates changed. |
 | 2026-11-18 | Phase 2 Director implementation: WW-007, WW-010, WW-011, WW-012 and WW-027 DONE with evidence; WW-026 IN PROGRESS; WW-025 BLOCKED (needs a live run with Malak's key); evidence added to WW-015, WW-020 and WW-024. Added WW-028 and WW-029. No existing target dates changed. |
 | 2026-11-18 | Readiness: added WW-030 (integration risk; textual merge clean, semantic tests pending) and WW-031 (World Morph defaults). Evidence added to WW-001, WW-020 and WW-025; live-test runbook and World Morph plan written. No existing target dates changed. |
+| 2026-11-18 | Re-check after Kilo pushed `116e97f`: WW-030 trial merge now has 4 conflicts (dated update added; earlier "textually clean" finding kept for history). Added WW-032 (UTF-16 lines in the WebGL branch `.gitignore`). No existing target dates changed. |

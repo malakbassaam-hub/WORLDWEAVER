@@ -157,7 +157,7 @@ batch. Kilo implements `SceneRenderer.playTransition()` and
 | Renderer, transitions, renderer tests | **Kilo Code** | `src/render/**` |
 | Studio shell | Kiro edits; Kilo proposes changes through review | `src/ui/shell.ts` (both branches touched it, see WW-030) |
 | Packages, build and test configuration | Kiro only | `package.json`, `package-lock.json`, `vite.config.ts`, `playwright.config.ts`, `vitest*.config.ts`, `tsconfig*.json` |
-| Tests | Kiro: `tests/e2e/**`, `tests/live/**` and `*.test.ts` outside `src/render/`; Kilo: `src/render/**/*.test.ts` | |
+| Tests | Kiro: `tests/e2e/**`, `tests/live/**` and `*.test.ts` outside `src/render/`; Kilo: `src/render/**/*.test.ts` and `tests/browser/**` (renderer browser tests, run as the `browser` Playwright project in Kiro's config) | |
 | Docs and steering | Kiro | `docs/**`, `.kiro/**`, `README.md` |
 
 Branching:
