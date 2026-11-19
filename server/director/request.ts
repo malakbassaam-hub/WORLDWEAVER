@@ -12,7 +12,12 @@ export const REQUEST_LIMITS = {
   maxShortText: 120,
 } as const;
 
-export type RequestMode = 'create' | 'edit';
+export type RequestMode = 'create' | 'edit' | 'morph';
+
+export interface RequestValidationOptions {
+  /** World Morph requests are refused unless explicitly enabled (DIRECTOR_MORPH=1). */
+  readonly allowMorph?: boolean;
+}
 
 export interface ContextEntityInput {
   readonly ref: string;
@@ -76,11 +81,12 @@ function ref(value: unknown, what: string, nullable: boolean): string | null {
   return value;
 }
 
-export function validateDirectorRequest(input: unknown): RequestValidation {
+export function validateDirectorRequest(input: unknown, options: RequestValidationOptions = {}): RequestValidation {
   try {
     const root = plain(input, 'Request');
     exactKeys(root, ROOT_KEYS, 'Request');
-    if (root.mode !== 'create' && root.mode !== 'edit') throw new Invalid('mode must be "create" or "edit".');
+    if (root.mode === 'morph' && !options.allowMorph) throw new Invalid('World Morph is not enabled on this server.');
+    if (root.mode !== 'create' && root.mode !== 'edit' && root.mode !== 'morph') throw new Invalid('mode must be "create" or "edit".');
     const prompt = text(root.prompt, 'prompt', REQUEST_LIMITS.maxPromptChars, UNSAFE_PROMPT);
 
     const world = plain(root.world, 'world');

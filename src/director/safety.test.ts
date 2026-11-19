@@ -27,11 +27,13 @@ describe('director safety', () => {
   it('scans every director production module', () => {
     expect(production.map(([p]) => p).sort()).toEqual([
       './apply.ts',
+      './characters.ts',
       './client.ts',
       './context.ts',
       './controller.ts',
       './describe.ts',
       './index.ts',
+      './morph.ts',
       './schema.ts',
       './translate.ts',
       './validate.ts',

@@ -36,11 +36,37 @@ const DIRECTION_VECTORS: Readonly<Record<Direction, Vec3>> = {
   back: [0, 0, 1],
 };
 
+/** Machine-readable tag for pin-protection rejections (other rejections have none). */
+export type RejectionRule = 'pinned' | 'pinned-ancestor' | 'pinned-parent';
+
+export interface GuardRejection {
+  readonly reason: string;
+  readonly rule?: RejectionRule;
+}
+
+/**
+ * Optional extra check per operation, run after the operation's events are
+ * built and before they are dry-run. Returning a rejection rejects the whole
+ * operation. `preview` is the world BEFORE this operation (earlier accepted
+ * operations already applied).
+ */
+export type OperationGuard = (input: {
+  readonly op: ProposalOperation;
+  readonly index: number;
+  readonly events: readonly WorldEvent[];
+  readonly preview: World;
+}) => GuardRejection | null;
+
+export interface TranslateOptions {
+  readonly guard?: OperationGuard;
+}
+
 export interface OperationOutcome {
   readonly index: number;
   readonly op: ProposalOperation['op'];
   readonly status: 'accepted' | 'rejected';
   readonly reason?: string;
+  readonly rule?: RejectionRule;
   readonly eventCount: number;
   /** Entities created or targeted by this operation. */
   readonly entityIds: readonly EntityId[];
@@ -67,7 +93,7 @@ export interface Translation {
   readonly display: { readonly summary: string; readonly worldName?: string; readonly biome?: string };
 }
 
-export function translateProposal(world: World, proposal: WorldProposal): Translation {
+export function translateProposal(world: World, proposal: WorldProposal, options: TranslateOptions = {}): Translation {
   const context = buildWorldContext(world);
   const key = proposalKey(world, proposal);
   const nextId = createIdFactory(`ai-${key}`);
@@ -80,7 +106,12 @@ export function translateProposal(world: World, proposal: WorldProposal): Transl
     const rng = createRng((hashString(`${key}:${index}`) ^ world.seed) >>> 0);
     const built = buildOperation(op, { preview, context, rng, nextId, note });
     if ('reason' in built) {
-      outcomes.push({ index, op: op.op, status: 'rejected', reason: built.reason, eventCount: 0, entityIds: [] });
+      outcomes.push({ index, op: op.op, status: 'rejected', reason: built.reason, ...(built.rule ? { rule: built.rule } : {}), eventCount: 0, entityIds: [] });
+      return;
+    }
+    const guarded = options.guard?.({ op, index, events: built.events, preview }) ?? null;
+    if (guarded) {
+      outcomes.push({ index, op: op.op, status: 'rejected', reason: guarded.reason, ...(guarded.rule ? { rule: guarded.rule } : {}), eventCount: 0, entityIds: [] });
       return;
     }
     // Changes that would not alter anything are rejected so history stays clean.
@@ -151,7 +182,7 @@ interface BuildContext {
   readonly note: string;
 }
 
-type Built = { readonly events: WorldEvent[]; readonly entityIds: EntityId[] } | { readonly reason: string };
+type Built = { readonly events: WorldEvent[]; readonly entityIds: EntityId[] } | { readonly reason: string; readonly rule?: RejectionRule };
 
 function buildOperation(op: ProposalOperation, ctx: BuildContext): Built {
   const base = { source: 'director' as const, note: ctx.note };
@@ -240,12 +271,12 @@ function buildOperation(op: ProposalOperation, ctx: BuildContext): Built {
  * the entity's current state from the preview (earlier operations may have
  * changed or removed it). Pinned entities are protected from Director changes.
  */
-function resolveTarget(ref: string, ctx: BuildContext, mutating: boolean): { readonly entity: Entity } | { readonly reason: string } {
+function resolveTarget(ref: string, ctx: BuildContext, mutating: boolean): { readonly entity: Entity } | { readonly reason: string; readonly rule?: RejectionRule } {
   const id = ctx.context.refs.get(ref);
   if (!id) return { reason: `Unknown entity ref "${ref}".` };
   const entity = ctx.preview.entities[id];
   if (!entity) return { reason: `Entity ${ref} no longer exists.` };
-  if (mutating && entity.pinned) return { reason: `"${entity.name}" is pinned and protected from Director changes.` };
+  if (mutating && entity.pinned) return { reason: `"${entity.name}" is pinned and protected from Director changes.`, rule: 'pinned' };
   return { entity };
 }
 

@@ -14,7 +14,8 @@ const MAX_RESPONSE_CHARS = 256 * 1024;
 export type ProxyMode = 'live' | 'recorded';
 
 export interface DirectorRequestBody {
-  readonly mode: 'create' | 'edit';
+  /** 'morph' is accepted by the proxy only when started with DIRECTOR_MORPH=1. */
+  readonly mode: 'create' | 'edit' | 'morph';
   readonly prompt: string;
   readonly world: {
     readonly worldName: string;

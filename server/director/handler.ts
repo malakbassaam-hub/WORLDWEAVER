@@ -69,6 +69,8 @@ export interface HealthReport {
   readonly modeReason: string;
   readonly model: string;
   readonly keyConfigured: boolean;
+  /** World Morph requests accepted (DIRECTOR_MORPH=1). Off by default. */
+  readonly morphEnabled: boolean;
   /** True only when live requests can actually be made. */
   readonly liveReady: boolean;
   readonly recordings: number;
@@ -141,6 +143,7 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
     modeReason: config.modeReason,
     model: config.model,
     keyConfigured: config.keyConfigured,
+    morphEnabled: config.morphEnabled,
     liveReady: config.mode === 'live' && config.keyConfigured,
     recordings: RECORDINGS.length,
     limits: {
@@ -193,7 +196,7 @@ export function createDirectorHandler(options: HandlerOptions): DirectorHandler 
     } catch {
       return fail('BAD_REQUEST', 'Request body is not valid JSON.');
     }
-    const valid = validateDirectorRequest(parsed);
+    const valid = validateDirectorRequest(parsed, { allowMorph: config.morphEnabled });
     if (!valid.ok) return fail('BAD_REQUEST', valid.message);
     const request = valid.request;
     const logBase = { promptChars: request.prompt.length, entities: request.world.entityCount, task: request.mode };

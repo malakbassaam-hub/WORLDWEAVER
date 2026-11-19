@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { WorldStore } from '../../src/core/store';
 import { applyTranslation } from '../../src/director/apply';
 import { buildWorldContext } from '../../src/director/context';
+import { applyMorph, checkPinnedInvariant, translateMorph } from '../../src/director/morph';
 import { translateProposal } from '../../src/director/translate';
 import { parseProposalText } from '../../src/director/validate';
 import { buildCrystalKingdom } from '../../src/worlds/crystalKingdom';
@@ -26,6 +27,21 @@ describe('recordings', () => {
     const parsed = parseProposalText(JSON.stringify(recording.response));
     if (!parsed.ok) throw new Error(JSON.stringify(parsed.errors));
     const store = new WorldStore(buildCrystalKingdom());
+    if (recording.mode === 'morph') {
+      const m = translateMorph(store.getState(), parsed.proposal);
+      if (id === 'morph-shift-isle') {
+        // Demonstrates ancestor protection: moving the pinned citadel's isle blocks the morph.
+        expect(m.applicable).toBe(false);
+        expect(m.outcomes[0]).toMatchObject({ status: 'rejected', rule: 'pinned-ancestor' });
+        return;
+      }
+      expect(m.outcomes.filter((o) => o.status === 'rejected')).toEqual([]);
+      expect(m.applicable, m.blockedReason).toBe(true);
+      expect(applyMorph(store, m, { mode: 'recorded', recordingId: id }).ok).toBe(true);
+      expect(checkPinnedInvariant(buildCrystalKingdom(), store.getState())).toEqual([]);
+      expect(store.undo()).toBe(true);
+      return;
+    }
     const t = translateProposal(store.getState(), parsed.proposal);
     if (id === 'edit-pinned-citadel') {
       // Demonstrates pin protection: the whole proposal is refused.
@@ -52,6 +68,7 @@ describe('recordings', () => {
   it('has exactly one default per mode and unique ids', () => {
     expect(RECORDINGS.filter((r) => r.mode === 'create' && r.isDefault)).toHaveLength(1);
     expect(RECORDINGS.filter((r) => r.mode === 'edit' && r.isDefault)).toHaveLength(1);
+    expect(RECORDINGS.filter((r) => r.mode === 'morph' && r.isDefault)).toHaveLength(1);
     expect(new Set(RECORDINGS.map((r) => r.id)).size).toBe(RECORDINGS.length);
   });
 
