@@ -73,6 +73,8 @@ describe('structural checks', () => {
       { type: 'entity/pinnedChanged', id: 'a', pinned: 1, source: 'user' },
       { type: 'entity/added', entity: { id: 'a', name: 'n', kind: 'k', parentId: null, tags: [1], pinned: false, components: { transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } } }, source: 'user' },
       { type: 'entity/added', entity: { id: 'a', name: 'n', kind: 'k', parentId: null, tags: [], pinned: false, components: {} }, source: 'user' },
+      { type: 'entity/added', entity: { id: 'a', name: 'n', kind: 'k', parentId: null, tags: [], pinned: false }, source: 'user' },
+      { type: 'entity/added', entity: { id: 'a', name: 'n', kind: 'k', parentId: null, tags: [], pinned: false, components: null }, source: 'user' },
       { type: 'world/exploded', source: 'user' },
       { type: 'entity/renamed', id: 'a', name: 'x', source: 'user', note: 5 },
     ];

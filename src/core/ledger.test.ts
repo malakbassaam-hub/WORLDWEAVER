@@ -263,6 +263,12 @@ describe('Causal Ledger: identity, ordering and the hash chain', () => {
     [swapped[1], swapped[2]] = [swapped[2]!, swapped[1]!];
     expect(verifyLedgerChain({ ...view, entries: swapped })).toMatchObject({ ok: false, brokenAt: 1 });
     expect(verifyLedgerChain({ ...view, head: view.genesis })).toMatchObject({ ok: false, reason: 'Head does not match the last entry.' });
+    // A forged hash on the last entry, with the head updated to match, is caught by the content hash check.
+    const last = view.entries.length - 1;
+    const forged = 'f'.repeat(16);
+    expect(verifyLedgerChain({ ...tamper(last, { hash: forged }), head: forged })).toMatchObject({ ok: false, brokenAt: last, reason: 'Entry content does not match its hash.' });
+    // A changed ID alone is caught too.
+    expect(verifyLedgerChain(tamper(1, { id: view.entries[0]!.id }))).toMatchObject({ ok: false, brokenAt: 1, reason: 'Entry ID does not match its hash.' });
   });
 
   it('verifies a stored ledger against the log, and rejects a different initial world or a shorter log', () => {
