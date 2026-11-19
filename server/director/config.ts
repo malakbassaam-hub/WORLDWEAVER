@@ -17,7 +17,7 @@ export interface DirectorConfig {
   readonly minIntervalMs: number;
   readonly recordedLatencyMs: number;
   readonly apiBase: string;
-  /** World Morph requests are accepted only when DIRECTOR_MORPH=1 (default off; WW-031, WW-025). */
+  /** World Morph requests are accepted only when DIRECTOR_MORPH=1 (default off until WW-025 and WW-030 pass). */
   readonly morphEnabled: boolean;
   /** Returns the key for the upstream header. Never log or return its value. */
   getApiKey(): string | null;

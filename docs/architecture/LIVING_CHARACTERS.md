@@ -18,10 +18,23 @@ review-and-apply flow, or change pinned entities.
 
 ## Memory (implemented contract)
 
-- `CharacterMemory = { id, characterId, text, causedBySeq }`.
+- `CharacterMemory = { id, characterId, text, causedBySeq }`. `memoryId()`
+  derives a stable ID from the character, the seq and the normalised text.
 - A memory is admissible only if `causedBySeq` refers to an **accepted** change
   in the session log (`validateMemory`). Characters cannot invent events.
-- `memoriesForContext` keeps the 12 most recent memories for the prompt.
+- **Causal Ledger grounding (2026-11-19):** `groundMemories(state, ledger)`
+  classifies each memory as `grounded` (its change is in effect), `undone`
+  (the change was undone, or its redo was discarded) or `unknown`. With a
+  ledger, `memoriesForContext` uses grounded memories only, so a character
+  never treats an undone change as current fact. A redo makes the memory
+  grounded again.
+- **Parallel Futures:** `memoriesForFuture(state, ledger, baseSeq)` keeps only
+  grounded memories of changes made before the fork.
+- **World Morph:** characters are ordinary entities of kind `character`.
+  `charactersExposedToMorph(world)` lists unpinned characters so the UI can warn
+  before a morph. Pinning a character protects it under WW-031.
+- `memoriesForContext` keeps the 12 most recent memories for the prompt, in a
+  deterministic order.
 
 ## Production design (not implemented)
 
@@ -40,7 +53,17 @@ review-and-apply flow, or change pinned entities.
 
 ## Tests
 
-- **Done:** `characters.test.ts` covers a valid turn, pinned protection,
-  hostile and malformed turns, grounded memories and the context limit.
+- **Done:** `characters.test.ts` (8) covers a valid turn, pinned protection,
+  hostile and malformed turns, log-grounded memories, ledger grounding through
+  undo and redo, memories inside a future, characters exposed to a morph, and
+  the context limit.
+
+## Open design questions (need the Master Plan, WW-023)
+
+- May a character propose changes to itself (rename, move, remove)?
+- Do memories belong to the world (and so branch with a future) or to the
+  session?
+- Retention: how many memories per character, and what happens to `undone`
+  memories after the redo history is discarded?
 - **To add:** proxy task schema tests, recorded character turns, browser talk
   flow, and memory persistence across reload.

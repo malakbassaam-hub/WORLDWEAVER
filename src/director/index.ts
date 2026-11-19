@@ -10,3 +10,4 @@ export * from './context';
 export * from './translate';
 export * from './apply';
 export * from './morph';
+export * from './futures';

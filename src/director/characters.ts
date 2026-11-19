@@ -11,6 +11,8 @@
  * NOT IMPLEMENTED: the character archetype (Kilo Code), the talk UI, the proxy
  * "character" task, persistence of memory (needs WW-016) and any model calls.
  */
+import { fingerprint } from '../core/fingerprint';
+import type { CausalLedgerView, LedgerEntry, LedgerEntryId } from '../core/ledger';
 import type { LogEntry } from '../core/store';
 import type { EntityId, World } from '../core/types';
 import { translateProposal, type Translation } from './translate';
@@ -98,7 +100,62 @@ export function validateMemory(memory: CharacterMemory, log: readonly LogEntry[]
   return errors;
 }
 
-/** Most recent memories that fit the prompt context, newest last. */
-export function memoriesForContext(state: CharacterState): CharacterMemory[] {
-  return [...state.memories].sort((a, b) => a.causedBySeq - b.causedBySeq).slice(-CHARACTER_LIMITS.maxMemoriesInContext);
+/** Most recent memories that fit the prompt context, newest last (ties broken by ID, so the order is deterministic). */
+export function memoriesForContext(state: CharacterState, ledger?: Pick<CausalLedgerView, 'entries' | 'inEffect'>): CharacterMemory[] {
+  const usable = ledger ? groundMemories(state, ledger).filter((g) => g.status === 'grounded').map((g) => g.memory) : [...state.memories];
+  return usable.sort((a, b) => a.causedBySeq - b.causedBySeq || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(-CHARACTER_LIMITS.maxMemoriesInContext);
+}
+
+// ---------------------------------------------------------------- Causal Ledger, Futures and Morph compatibility
+
+/**
+ * How a memory relates to the recorded history:
+ * - grounded: it refers to an applied change that is still in effect;
+ * - undone:   the change was applied and later undone (or its redo was discarded);
+ *             the character must not treat it as current fact;
+ * - unknown:  no applied change entry ends at that seq (never valid).
+ */
+export interface GroundedMemory {
+  readonly memory: CharacterMemory;
+  readonly status: 'grounded' | 'undone' | 'unknown';
+  readonly entryId: LedgerEntryId | null;
+}
+
+export function groundMemories(state: CharacterState, ledger: Pick<CausalLedgerView, 'entries' | 'inEffect'>): GroundedMemory[] {
+  const live = new Set(ledger.inEffect);
+  const bySeq = new Map<number, LedgerEntry>();
+  for (const e of ledger.entries) if (e.accepted && (e.kind === 'event' || e.kind === 'batch')) bySeq.set(e.seqAfter, e);
+  return state.memories.map((memory) => {
+    const entry = bySeq.get(memory.causedBySeq);
+    if (!entry) return { memory, status: 'unknown', entryId: null };
+    return { memory, status: live.has(entry.index) ? 'grounded' : 'undone', entryId: entry.id };
+  });
+}
+
+/**
+ * Memories a character keeps inside a Parallel Future that was forked at
+ * `baseSeq`: only grounded memories of changes made before the fork. Changes
+ * made in the original world after the fork did not happen in that future.
+ */
+export function memoriesForFuture(state: CharacterState, ledger: Pick<CausalLedgerView, 'entries' | 'inEffect'>, baseSeq: number): CharacterMemory[] {
+  return groundMemories(state, ledger)
+    .filter((g) => g.status === 'grounded' && g.memory.causedBySeq <= baseSeq)
+    .map((g) => g.memory);
+}
+
+/** Stable memory ID from its character, cause and text (same input, same ID). */
+export function memoryId(characterId: EntityId, causedBySeq: number, text: string): string {
+  return `mem-${fingerprint(`${characterId}\n${causedBySeq}\n${text.normalize('NFC').trim()}`)}`;
+}
+
+/** Entity kind used for characters (product.md §3: type = "character"). */
+export const CHARACTER_KIND = 'character';
+
+/**
+ * Characters that a World Morph could restyle or move: every unpinned
+ * character. The UI should warn before a morph; pinning a character protects
+ * it under the approved WW-031 policy, like any other entity.
+ */
+export function charactersExposedToMorph(world: World): EntityId[] {
+  return world.order.filter((id) => world.entities[id]?.kind === CHARACTER_KIND && !world.entities[id]?.pinned);
 }

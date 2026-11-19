@@ -10,13 +10,13 @@
  *      pose and effective visibility must be unchanged in the preview.
  *
  * STATUS: implemented and unit-tested, NOT enabled. The policy defaults below
- * are PROPOSED (WW-031) and not approved; live Gemini behaviour for morph
- * prompts is unverified (WW-025). Nothing here performs network requests.
+ * are approved (WW-031, 2026-11-19); live Gemini behaviour for morph prompts
+ * is unverified (WW-025). Nothing here performs network requests.
  */
+import { checkPinnedInvariant, pinClosure, quotedName, type PinnedViolation } from '../core/pins';
 import { hashString } from '../core/random';
-import { effectiveVisible, posesEqual, worldPose } from '../core/pose';
 import type { WorldStore } from '../core/store';
-import type { Entity, EntityId, World, WorldEvent } from '../core/types';
+import type { EntityId, World, WorldEvent } from '../core/types';
 import { applyTranslation, type ApplyContext, type ApplyOutcome } from './apply';
 import type { WorldProposal } from './schema';
 import { translateProposal, type GuardRejection, type OperationGuard, type Translation } from './translate';
@@ -36,17 +36,28 @@ export interface MorphPolicy {
   readonly allowAddToPinned: boolean;
 }
 
-/** Proposed defaults from WORLD_MORPH_PLAN.md section 2. NOT APPROVED (WW-031). */
-export const PROPOSED_MORPH_POLICY: MorphPolicy = Object.freeze({
+/**
+ * Defaults approved by Malak on 2026-11-19 (WW-031):
+ * - Policy A, D-WM-1: a morph that would modify an existing pinned entity is
+ *   rejected as a whole ('reject-proposal').
+ * - Policy B, D-WM-2: ancestors of pinned entities are protected from changes
+ *   that would affect the pinned descendant (move, hide/show, remove).
+ * - Policy C, D-WM-3: new children may be added under pinned entities, as long
+ *   as the pinned entity's data, world pose and visibility stay unchanged
+ *   (enforced by `checkPinnedInvariant`).
+ */
+export const APPROVED_MORPH_POLICY: MorphPolicy = Object.freeze({
   onPinViolation: 'reject-proposal',
   protectAncestors: true,
   allowAddToPinned: true,
 });
 
 export const MORPH_POLICY_STATUS = Object.freeze({
-  approved: false,
+  approved: true,
   issue: 'WW-031',
-  note: 'Defaults are proposals awaiting Malak\'s decision; World Morph is not enabled in the studio.',
+  approvedBy: 'Malak',
+  approvedOn: '2026-11-19',
+  note: 'Policies A, B and C (D-WM-1 to D-WM-3) are approved. D-WM-4 (transition duration) is still a proposal. Approval does not enable World Morph: it stays off until the live test (WW-025) and studio integration (WW-030) gates pass.',
 });
 
 export function describePolicy(policy: MorphPolicy): string {
@@ -55,29 +66,8 @@ export function describePolicy(policy: MorphPolicy): string {
 
 // ---------------------------------------------------------------- pin closure
 
-export interface PinClosure {
-  /** Entities with `pinned: true`, in world order. */
-  readonly pinned: readonly EntityId[];
-  /** Ancestors of pinned entities (excluding pinned entities themselves), in world order. */
-  readonly protectedAncestors: readonly EntityId[];
-  /** Ancestor → the first pinned descendant it protects (for messages). */
-  readonly protects: ReadonlyMap<EntityId, EntityId>;
-}
-
-export function pinClosure(world: World): PinClosure {
-  const pinned = world.order.filter((id) => world.entities[id]?.pinned);
-  const pinnedSet = new Set<EntityId>(pinned);
-  const protects = new Map<EntityId, EntityId>();
-  for (const id of pinned) {
-    const seen = new Set<string>([id]);
-    for (let p = world.entities[id]?.parentId ?? null; p && world.entities[p] && !seen.has(p); p = world.entities[p]?.parentId ?? null) {
-      seen.add(p);
-      if (!pinnedSet.has(p) && !protects.has(p)) protects.set(p, id);
-    }
-  }
-  const protectedAncestors = world.order.filter((id) => protects.has(id));
-  return { pinned, protectedAncestors, protects };
-}
+// Moved to src/core/pins.ts so Parallel Futures can share them; re-exported unchanged.
+export { checkPinnedInvariant, pinClosure, type PinClosure, type PinnedViolation } from '../core/pins';
 
 /** Order-independent fingerprint of the pinned set (FNV-1a over sorted IDs). */
 export function pinnedHash(pinned: readonly EntityId[]): string {
@@ -86,9 +76,7 @@ export function pinnedHash(pinned: readonly EntityId[]): string {
 
 // ---------------------------------------------------------------- guard
 
-function name(world: World, id: EntityId): string {
-  return `“${world.entities[id]?.name ?? id}”`;
-}
+const name = quotedName;
 
 function eventTarget(event: WorldEvent): EntityId {
   return event.type === 'entity/added' ? event.entity.id : event.id;
@@ -129,48 +117,6 @@ function reject(reason: string, rule: GuardRejection['rule']): GuardRejection {
   return rule ? { reason, rule } : { reason };
 }
 
-// ---------------------------------------------------------------- invariant
-
-export interface PinnedViolation {
-  readonly id: EntityId;
-  readonly kind: 'removed' | 'data' | 'pose' | 'visibility';
-  readonly message: string;
-}
-
-/**
- * Each pinned entity (as of `before`) must keep, in `after`: the same data
- * (including provenance), the same world pose, and the same effective
- * visibility. Returns all violations (empty = invariant holds).
- */
-export function checkPinnedInvariant(before: World, after: World, pinned: readonly EntityId[] = pinClosure(before).pinned): PinnedViolation[] {
-  const violations: PinnedViolation[] = [];
-  for (const id of pinned) {
-    const a = before.entities[id];
-    const b = after.entities[id];
-    if (!a) continue;
-    if (!b) {
-      violations.push({ id, kind: 'removed', message: `Pinned ${name(before, id)} was removed.` });
-      continue;
-    }
-    if (a !== b && canonical(a) !== canonical(b)) {
-      violations.push({ id, kind: 'data', message: `Pinned ${name(before, id)} was changed.` });
-    }
-    const pa = worldPose(before, id);
-    const pb = worldPose(after, id);
-    if (pa && pb && !posesEqual(pa, pb)) {
-      violations.push({ id, kind: 'pose', message: `Pinned ${name(before, id)} would move in the world.` });
-    }
-    if (effectiveVisible(before, id) !== effectiveVisible(after, id)) {
-      violations.push({ id, kind: 'visibility', message: `Pinned ${name(before, id)} would change visibility.` });
-    }
-  }
-  return violations;
-}
-
-function canonical(entity: Entity): string {
-  return JSON.stringify(entity);
-}
-
 // ---------------------------------------------------------------- translate + apply
 
 export interface MorphTranslation extends Translation {
@@ -188,7 +134,7 @@ export interface MorphTranslation extends Translation {
   readonly blockedReason?: string;
 }
 
-export function translateMorph(world: World, proposal: WorldProposal, policy: MorphPolicy = PROPOSED_MORPH_POLICY): MorphTranslation {
+export function translateMorph(world: World, proposal: WorldProposal, policy: MorphPolicy = APPROVED_MORPH_POLICY): MorphTranslation {
   const t = translateProposal(world, proposal, { guard: morphGuard(policy) });
   const closure = pinClosure(world);
   const violations = checkPinnedInvariant(world, t.preview, closure.pinned);

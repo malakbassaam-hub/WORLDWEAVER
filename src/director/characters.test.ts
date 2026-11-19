@@ -1,8 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { buildLedger } from '../core/ledger';
 import { WorldStore } from '../core/store';
 import { asEntityId } from '../core/types';
 import { buildCrystalKingdom } from '../worlds/crystalKingdom';
-import { admitCharacterTurn, CHARACTER_LIMITS, memoriesForContext, validateMemory, type CharacterState } from './characters';
+import {
+  admitCharacterTurn,
+  CHARACTER_KIND,
+  CHARACTER_LIMITS,
+  charactersExposedToMorph,
+  groundMemories,
+  memoriesForContext,
+  memoriesForFuture,
+  memoryId,
+  validateMemory,
+  type CharacterState,
+} from './characters';
 
 const CHAR = asEntityId('ck:character-001');
 
@@ -54,6 +66,58 @@ describe('Living Characters boundary', () => {
     // A rejected entry has the same worldSeq as the state before it; only accepted changes count.
     expect(rejected).toBe(accepted);
     expect(validateMemory({ id: 'm3', characterId: CHAR, text: '', causedBySeq: accepted }, store.getLog())[0]?.code).toBe('out_of_range');
+  });
+
+  it('grounds memories in the Causal Ledger: undone changes and unknown seqs are excluded from context', () => {
+    const initial = buildCrystalKingdom();
+    const store = new WorldStore(initial);
+    const spire = initial.order[4]!;
+    store.dispatch({ type: 'entity/renamed', id: spire, name: 'Kept', source: 'user' }); // seq 28, stays
+    store.dispatch({ type: 'entity/renamed', id: spire, name: 'Undone', source: 'user' }); // seq 29, undone below
+    const kept = store.getState().seq - 1;
+    const undone = store.getState().seq;
+    store.undo();
+    const state: CharacterState = {
+      characterId: CHAR,
+      persona: { displayName: 'Lumen', traits: [] },
+      memories: [
+        { id: memoryId(CHAR, kept, 'They named the spire Kept.'), characterId: CHAR, text: 'They named the spire Kept.', causedBySeq: kept },
+        { id: memoryId(CHAR, undone, 'They renamed it Undone.'), characterId: CHAR, text: 'They renamed it Undone.', causedBySeq: undone },
+        { id: 'm-x', characterId: CHAR, text: 'Invented.', causedBySeq: 4242 },
+      ],
+    };
+    const view = buildLedger(initial, store.getLog());
+    expect(groundMemories(state, view).map((g) => g.status)).toEqual(['grounded', 'undone', 'unknown']);
+    expect(groundMemories(state, view)[0]!.entryId).toBe(view.entries[0]!.id);
+    expect(memoriesForContext(state, view).map((m) => m.text)).toEqual(['They named the spire Kept.']);
+    expect(memoryId(CHAR, kept, ' They named the spire Kept. ')).toBe(state.memories[0]!.id);
+    // Redo makes the undone memory grounded again.
+    store.redo();
+    expect(groundMemories(state, buildLedger(initial, store.getLog())).map((g) => g.status)).toEqual(['grounded', 'grounded', 'unknown']);
+  });
+
+  it('a future keeps only memories of changes made before its fork', () => {
+    const initial = buildCrystalKingdom();
+    const store = new WorldStore(initial);
+    const spire = initial.order[4]!;
+    store.dispatch({ type: 'entity/renamed', id: spire, name: 'Before fork', source: 'user' });
+    const forkSeq = store.getState().seq;
+    store.dispatch({ type: 'entity/renamed', id: spire, name: 'After fork', source: 'user' });
+    const mem = (seq: number, text: string) => ({ id: memoryId(CHAR, seq, text), characterId: CHAR, text, causedBySeq: seq });
+    const state: CharacterState = { characterId: CHAR, persona: { displayName: 'Lumen', traits: [] }, memories: [mem(forkSeq, 'before'), mem(store.getState().seq, 'after')] };
+    expect(memoriesForFuture(state, buildLedger(initial, store.getLog()), forkSeq).map((m) => m.text)).toEqual(['before']);
+  });
+
+  it('lists unpinned characters a morph could change; pinning protects them', () => {
+    const store = new WorldStore(buildCrystalKingdom());
+    expect(charactersExposedToMorph(store.getState())).toEqual([]);
+    const add = (id: string, pinned: boolean) => store.dispatch({
+      type: 'entity/added', source: 'user',
+      entity: { id: asEntityId(id), name: id, kind: CHARACTER_KIND, parentId: null, tags: [], pinned, components: { transform: { position: [0, 0, 0], rotation: [0, 0, 0], scale: [1, 1, 1] } } },
+    });
+    add('char-a', false);
+    add('char-b', true);
+    expect(charactersExposedToMorph(store.getState())).toEqual(['char-a']);
   });
 
   it('keeps only the most recent memories in context', () => {

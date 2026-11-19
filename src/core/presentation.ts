@@ -44,6 +44,73 @@ export interface TransitionEnvironment {
   readonly performanceMode: () => boolean;
 }
 
+/**
+ * Parallel Futures preview CONTRACT (docs/ledger-futures/UI_RENDERER_HANDOFF.md).
+ *
+ * A preview shows a future's world in the viewport WITHOUT changing the real
+ * world. Rules for the presenter (Kilo Code, `src/render/**`):
+ * 1. Display only: never mutate a World, never dispatch events.
+ * 2. `show` replaces any previous preview; `clear` returns the viewport to the
+ *    live world exactly. The studio calls `clear` on commit, discard, any store
+ *    change, undo/redo, context loss and dispose.
+ * 3. After WebGL context restore, the studio calls `show` again with the
+ *    latest preview; the presenter must not rely on cached GPU state.
+ * 4. Pinned entities are drawn exactly as in `base` (they cannot differ).
+ * 5. `derived` entities moved or changed visibility only through an ancestor;
+ *    highlight them differently from `changed`, or not at all.
+ */
+export interface FuturePreview {
+  readonly kind: 'future-preview';
+  readonly futureId: string;
+  readonly label: string;
+  readonly base: World;
+  readonly preview: World;
+  readonly added: readonly EntityId[];
+  readonly removed: readonly EntityId[];
+  readonly changed: readonly EntityId[];
+  readonly derived: readonly EntityId[];
+  readonly pinned: readonly EntityId[];
+  /** A stale preview may still be shown, with a warning; it cannot be committed. */
+  readonly stale: boolean;
+}
+
+export interface FuturePreviewPresenter {
+  show(preview: FuturePreview): void;
+  clear(): void;
+}
+
+/** Minimal view of the futures manager needed to build a preview. */
+export interface FuturePreviewSource {
+  get(id: string): { readonly label: string; readonly stale: boolean; readonly status: string } | null;
+  state(id: string): World | null;
+  base(id: string): World | null;
+  compare(id: string):
+    | { readonly ok: true; readonly value: { readonly comparison: { readonly added: readonly EntityId[]; readonly removed: readonly EntityId[]; readonly changed: readonly EntityId[]; readonly derived: ReadonlyArray<{ readonly id: EntityId }> }; readonly pinned: readonly EntityId[] } }
+    | { readonly ok: false };
+}
+
+export function buildFuturePreview(source: FuturePreviewSource, id: string): FuturePreview | null {
+  const view = source.get(id);
+  const base = source.base(id);
+  const preview = source.state(id);
+  const c = source.compare(id);
+  if (!view || view.status !== 'open' || !base || !preview || !c.ok) return null;
+  const derived = [...new Set(c.value.comparison.derived.map((d) => d.id))];
+  return {
+    kind: 'future-preview',
+    futureId: id,
+    label: view.label,
+    base,
+    preview,
+    added: [...c.value.comparison.added],
+    removed: [...c.value.comparison.removed],
+    changed: [...c.value.comparison.changed],
+    derived,
+    pinned: [...c.value.pinned],
+    stale: view.stale,
+  };
+}
+
 export function buildMorphTransition(before: World, after: World, events: readonly WorldEvent[], pinned: readonly EntityId[]): WorldTransition {
   const pinnedSet = new Set(pinned);
   const ids = new Set<EntityId>();

@@ -14,7 +14,7 @@ import {
   MORPH_POLICY_STATUS,
   pinClosure,
   pinnedHash,
-  PROPOSED_MORPH_POLICY,
+  APPROVED_MORPH_POLICY,
   translateMorph,
   type MorphPolicy,
 } from './morph';
@@ -25,7 +25,7 @@ import { parseProposalText, validateProposal } from './validate';
 // Default Crystal Kingdom refs: e1 Isle of Aurelion (parent of pinned e2 Aurelion Citadel),
 // e3 Celestial Halo (child of e2), e4–e9 spires (children of e1), e10 Veilstone Reach, e11 its cluster.
 const kingdom = () => buildCrystalKingdom();
-const policy = (p: Partial<MorphPolicy> = {}): MorphPolicy => ({ ...PROPOSED_MORPH_POLICY, ...p });
+const policy = (p: Partial<MorphPolicy> = {}): MorphPolicy => ({ ...APPROVED_MORPH_POLICY, ...p });
 
 function proposal(operations: unknown[], summary = 'Morph the kingdom.'): WorldProposal {
   const r = validateProposal({ summary, operations });
@@ -64,12 +64,14 @@ const VIOLET_DUSK = [
 ];
 
 describe('policy status', () => {
-  it('ships the proposed defaults as NOT approved (WW-031)', () => {
-    expect(MORPH_POLICY_STATUS.approved).toBe(false);
+  it('ships the WW-031 approved defaults (policies A, B, C)', () => {
+    expect(MORPH_POLICY_STATUS.approved).toBe(true);
     expect(MORPH_POLICY_STATUS.issue).toBe('WW-031');
-    expect(PROPOSED_MORPH_POLICY).toEqual({ onPinViolation: 'reject-proposal', protectAncestors: true, allowAddToPinned: true });
-    expect(Object.isFrozen(PROPOSED_MORPH_POLICY)).toBe(true);
-    expect(describePolicy(PROPOSED_MORPH_POLICY)).toBe('reject-proposal;ancestors=protected;addToPinned=allowed');
+    expect(MORPH_POLICY_STATUS.approvedOn).toBe('2026-11-19');
+    expect(Object.isFrozen(MORPH_POLICY_STATUS)).toBe(true);
+    expect(APPROVED_MORPH_POLICY).toEqual({ onPinViolation: 'reject-proposal', protectAncestors: true, allowAddToPinned: true });
+    expect(Object.isFrozen(APPROVED_MORPH_POLICY)).toBe(true);
+    expect(describePolicy(APPROVED_MORPH_POLICY)).toBe('reject-proposal;ancestors=protected;addToPinned=allowed');
   });
 });
 
@@ -283,7 +285,7 @@ describe('applyMorph: atomicity, undo/redo, metadata', () => {
       pinnedCount: '1',
       pinnedHash: pinnedHash([citadel]),
       policy: 'reject-proposal;ancestors=protected;addToPinned=allowed',
-      policyApproved: 'false',
+      policyApproved: 'true',
       pinRejections: '0',
       mode: 'recorded',
       recordingId: 'morph-violet-dusk',

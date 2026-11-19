@@ -3,7 +3,7 @@ import { WorldStore } from '../core/store';
 import { buildCrystalKingdom } from '../worlds/crystalKingdom';
 import type { ClientResult, DirectorRequestBody } from './client';
 import { DirectorController } from './controller';
-import { checkPinnedInvariant, PROPOSED_MORPH_POLICY, type MorphTranslation } from './morph';
+import { checkPinnedInvariant, APPROVED_MORPH_POLICY, type MorphTranslation } from './morph';
 
 const VIOLET = JSON.stringify({
   summary: 'Violet dusk.',
@@ -50,7 +50,7 @@ describe('DirectorController: World Morph', () => {
     expect(p.kind).toBe('morph');
     const t = p.translation as MorphTranslation;
     expect(t.kind).toBe('morph');
-    expect(t.policy).toEqual(PROPOSED_MORPH_POLICY);
+    expect(t.policy).toEqual(APPROVED_MORPH_POLICY);
     expect(t.applicable).toBe(true);
     expect(store.getState()).toBe(before); // nothing applied before explicit approval
 
