@@ -15,6 +15,7 @@ export interface RendererCallbacks {
   onSelect(id: EntityId | null): void;
   onHover?(id: EntityId | null, clientX: number, clientY: number): void;
   onContextLost?(): void;
+  onContextRestored?(): void;
 }
 
 export interface RenderStats {
@@ -70,12 +71,12 @@ export class SceneRenderer {
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
-  private readonly environment: Environment;
+  private environment: Environment;
   private readonly entityRoot = new THREE.Group();
   private readonly bindings = new Map<string, Binding>();
   private readonly raycaster = new THREE.Raycaster();
   private readonly ndc = new THREE.Vector2();
-  private readonly marker: THREE.Group;
+  private marker: THREE.Group;
   private readonly markerMaterials: THREE.MeshBasicMaterial[] = [];
   private readonly resizeObserver: ResizeObserver;
   private readonly timer = new THREE.Timer();
@@ -89,11 +90,15 @@ export class SceneRenderer {
   private fps = 60;
   private disposed = false;
   private contextLost = false;
+  /** Last committed world snapshot, used to rebuild the scene after context restore. */
+  private lastWorld: World | null = null;
+  /** Canvas element owned by the renderer; exposed so the shell can re-attach it after a fallback. */
+  public readonly domElement: HTMLCanvasElement;
 
   constructor(
     private readonly container: HTMLElement,
     private readonly callbacks: RendererCallbacks,
-    seed: number,
+    private readonly seed: number,
   ) {
     if (!isWebGLAvailable()) {
       throw new WebGLUnavailableError('WebGL 2 is not available in this browser or has been disabled.');
@@ -105,6 +110,7 @@ export class SceneRenderer {
       throw new WebGLUnavailableError(`Could not create a WebGL context: ${(error as Error).message}`);
     }
     this.renderer = renderer;
+    this.domElement = renderer.domElement;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
@@ -160,6 +166,7 @@ export class SceneRenderer {
 
   /** Reconciles the scene with a world snapshot. Cheap for unchanged entities. */
   sync(world: World): void {
+    this.lastWorld = world;
     const seen = new Set<string>();
     for (const id of world.order) {
       const entity = world.entities[id];
@@ -524,8 +531,57 @@ export class SceneRenderer {
   };
 
   private onContextRestored = () => {
-    this.contextLost = false;
+    this.rebuildResources();
+    this.callbacks.onContextRestored?.();
   };
+
+  /**
+   * Rebuilds WebGL resources after a context restore, preserving world state,
+   * selection and undo/redo history (which live outside the renderer).
+   *
+   * Three.js r0.187 re-initialises GL management state on restore
+   * (`WebGLRenderer.onContextRestore` → `initGLContext()`) but does not
+   * recreate context-bound GPU resources: the bloom composer's render-target
+   * framebuffers, shared canvas textures and entity archetype materials all
+   * hold invalid WebGL handles after a context loss. This method rebuilds
+   * them from the last committed world snapshot.
+   */
+  public rebuildResources(): void {
+    if (this.disposed) return;
+    try {
+      // The bloom composer's render target is context-bound; rebuild it on next setQuality.
+      if (this.composer) {
+        this.disposeComposer(this.composer);
+        this.composer = null;
+      }
+      // Shared textures lose their GPU objects on context loss.
+      disposeSharedTextures();
+      // Drop stale bindings so archetypes rebuild with fresh GL objects.
+      for (const binding of this.bindings.values()) this.destroyBinding(binding);
+      this.bindings.clear();
+      // Rebuild the environment from the original seed.
+      this.scene.remove(this.environment.group);
+      this.environment.dispose();
+      this.environment = createEnvironment(this.seed);
+      this.scene.add(this.environment.group);
+      // Rebuild the selection marker (meshes/materials lost their GL objects).
+      this.marker.traverse(disposeObject);
+      this.scene.remove(this.marker);
+      this.markerMaterials.length = 0;
+      this.marker = this.createMarker();
+      this.scene.add(this.marker);
+      // Re-sync the last committed world; recreates bindings and fresh archetype resources.
+      if (this.lastWorld) this.sync(this.lastWorld);
+      // Restore quality mode (rebuilds the composer if cinematic), pixel ratio and size.
+      this.setQuality(this.quality);
+      this.contextLost = false;
+      this.refreshMarker();
+    } catch (error) {
+      this.contextLost = true;
+      this.callbacks.onContextLost?.();
+      throw error;
+    }
+  }
 }
 
 function isShown(obj: THREE.Object3D): boolean {
