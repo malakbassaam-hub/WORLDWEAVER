@@ -51,6 +51,8 @@ export interface HealthInfo {
   readonly keyConfigured: boolean;
   readonly liveReady: boolean;
   readonly modeReason: string;
+  /** World Morph requests accepted by the server (DIRECTOR_MORPH=1). Off by default. */
+  readonly morphEnabled: boolean;
 }
 
 type FetchFn = (input: string, init?: RequestInit) => Promise<Response>;
@@ -105,6 +107,7 @@ export async function fetchHealth(options: { signal?: AbortSignal; fetchImpl?: F
       keyConfigured: d.keyConfigured === true,
       liveReady: d.liveReady === true,
       modeReason: str(d.modeReason, 160) ?? '',
+      morphEnabled: d.morphEnabled === true,
     };
   } catch {
     return null;

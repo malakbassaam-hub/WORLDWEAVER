@@ -22,15 +22,17 @@ import { buildCrystalKingdom } from './worlds/crystalKingdom';
  *   UI intent -> StudioActions.edit -> WorldStore.dispatch -> reducer
  *   WorldStore change -> renderer.sync + panel.update
  */
-function boot(host: HTMLElement) {
+async function boot(host: HTMLElement) {
   const genesis = buildCrystalKingdom();
   const store = new WorldStore(genesis);
   const selection = new SelectionModel();
   let renderer: SceneRenderer | null = null;
 
-  // World Morph is disabled until WW-031 (Malak's approval) and WW-025 (live Gemini review).
-  // The recorded-mode demonstration remains accessible through the VITE_DIRECTOR_MORPH env flag.
-  const MORPH_ENABLED = import.meta.env.VITE_DIRECTOR_MORPH === '1' || import.meta.env.VITE_DIRECTOR_MORPH === 'true';
+  // World Morph activation is server-side only. Never read import.meta.env in
+  // client code (steering rule). The /api/director/health endpoint reports
+  // morphEnabled from DIRECTOR_MORPH on the server process. Default off.
+  const health = await fetchHealth();
+  const MORPH_ENABLED = health?.morphEnabled === true;
 
   const shell = new StudioShell(host, genesis, {
     undo: () => actions.undo(),
@@ -233,8 +235,8 @@ function boot(host: HTMLElement) {
 
 const host = document.getElementById('app');
 if (!host) throw new Error('#app element missing');
-const teardown = boot(host);
-
-if (import.meta.hot) {
-  import.meta.hot.dispose(teardown);
-}
+boot(host).then((teardown) => {
+  if (import.meta.hot) {
+    import.meta.hot.dispose(teardown);
+  }
+});
