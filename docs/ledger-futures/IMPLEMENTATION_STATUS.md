@@ -5,6 +5,22 @@ Worktree: `C:\Users\user\WORLDWEAVER-LEDGER`. Last updated: 2026-11-19.
 Nothing here is merged, and nothing is wired into the studio
 (`src/main.ts`, `src/ui/shell.ts` and `src/render/**` are unchanged).
 
+## Update 2026-11-20: panels built (branch `feature/ledger-futures-ui-1120`)
+
+| Item | Status | Evidence |
+|---|---|---|
+| Causal Ledger panel: timeline, filters, expandable details, before/after fields, recorded / observed / derived sections, AI-text labelling, undo state, batch actions, empty, loading and error states, keyboard | **Built and tested** | `ledgerModel.test.ts` (12), panel browser tests 1 to 4 |
+| Parallel Futures panel: baseline, up to 4 cards, create, Preview vs Apply, Rebase, per-future undo/redo, discard, pin feedback, Director prompt inside a future, side-by-side comparison, contested filter | **Built and tested** | `futuresModel.test.ts` (7), `futureRequest.test.ts` (7), panel browser tests 5 to 10 |
+| Integration adapter `mountLedgerFutures` | **Built and tested** (demo page) | [UI_INTEGRATION.md](UI_INTEGRATION.md) |
+| Mounted in the studio (`src/main.ts`) | **PENDING** (Kilo Code, shared file) | — |
+| Viewport preview of a future | **NOT IMPLEMENTED** (renderer); the UI says so | — |
+| Recorded demo page | Built (`ledger-futures-demo.html`, dev server only) | `fixtures.test.ts` (2) |
+
+Verification on 2026-11-20: type check PASS; 391 unit tests passed, 0 failed,
+0 skipped (30 files); production build PASS, and the demo and panels are not
+in the production bundle; panel browser tests 10 of 10 PASS. Studio browser
+tests for the panels are PENDING until they are mounted.
+
 ## Readiness by feature
 
 | Feature | Domain logic | UI / renderer | Persistence | Ready for |
