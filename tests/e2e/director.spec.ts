@@ -399,3 +399,106 @@ test.describe('World Morph (recorded mode)', () => {
     expect(log.errors).toEqual([]);
   });
 });
+
+test.describe('studio integration: ledger and futures', () => {
+  const ledger = (page: Page) => page.locator('.ww-panel.ww-ledger');
+  const futures = (page: Page) => page.locator('.ww-panel.ww-futures');
+  const newFutureBtn = (page: Page) => page.locator('.ww-btn.is-primary.is-small', { hasText: 'New future' });
+  const previewBtn = (page: Page) => page.locator('.ww-btn.is-small', { hasText: 'Preview' });
+  const stopPreviewBtn = (page: Page) => page.locator('.ww-btn.is-small', { hasText: 'Stop preview' });
+  const backToRealBtn = (page: Page) => page.locator('.ww-btn.is-small', { hasText: 'Back to the real world' });
+
+  async function openLedgerAndFutures(page: Page) {
+    const log = await openStudio(page);
+    await expect(ledger(page)).toBeVisible();
+    await expect(futures(page)).toBeVisible();
+    await expect(page.locator('.ww-panel.ww-ledger')).toContainText('Causal Ledger');
+    await expect(page.locator('.ww-panel.ww-futures')).toContainText('Parallel Futures');
+    await expect(page.locator('.ww-panel.ww-futures')).toContainText('No futures yet');
+    return log;
+  }
+
+  test('console stays clean with both panels mounted', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    await page.waitForTimeout(1500);
+    expect(log.errors).toEqual([]);
+  });
+
+  test('ledger shows a new entry after an inspector edit; Ctrl+Z marks it Undone', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    const before = await page.locator('.ww-ledger-row').count();
+    await page.locator('.ww-tree-row', { hasText: 'Sentinel Spire I' }).first().click();
+    const name = page.locator('.ww-name-input');
+    await name.fill('Hand-edited Spire');
+    await name.press('Enter');
+    await page.waitForTimeout(500);
+    await expect(page.locator('.ww-ledger-row')).toHaveCount(before + 1);
+    await expect(page.locator('.ww-ledger-row').last()).toContainText('Renamed');
+    await page.locator('.ww-topbar [aria-label="Undo"]').click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.ww-ledger-row.is-undone')).toHaveCount(1);
+    expect(log.errors).toEqual([]);
+  });
+
+  test('director create appears as a Director batch in the ledger', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    await ask(page, 'Grow a crystal garden on the main isle');
+    await expect(card(page, 'preview')).toBeVisible();
+    await action(page, 'apply').click();
+    await expect(card(page, 'applied')).toBeVisible();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.ww-ledger-row.is-director')).toHaveCount(1);
+    expect(log.errors).toEqual([]);
+  });
+
+  test('future created, previewed and cancelled; Ctrl+Z restores the world', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    await newFutureBtn(page).click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.ww-future-card')).toHaveCount(1);
+    await previewBtn(page).click();
+    await page.waitForTimeout(500);
+    await expect(stopPreviewBtn(page)).toBeVisible();
+    await expect(page.locator('.ww-futures-previewbar')).not.toHaveCount(0);
+    await stopPreviewBtn(page).click();
+    await page.waitForTimeout(500);
+    await expect(page.locator('.ww-futures-previewbar')).toBeHidden();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('cancel during future preview restores the real world', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    await newFutureBtn(page).click();
+    await page.waitForTimeout(500);
+    await previewBtn(page).click();
+    await page.waitForTimeout(500);
+    await expect(stopPreviewBtn(page)).toBeVisible();
+    await stopPreviewBtn(page).click();
+    await page.waitForTimeout(500);
+    await expect(backToRealBtn(page)).toHaveCount(0);
+    await expect(stopPreviewBtn(page)).toHaveCount(0);
+    await expect(page.locator('.ww-futures-previewbar')).toBeHidden();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('four-future limit blocks creation', async ({ page }) => {
+    const log = await openLedgerAndFutures(page);
+    for (let i = 0; i < 4; i++) {
+      await newFutureBtn(page).click();
+      await page.waitForTimeout(300);
+    }
+    await expect(page.locator('.ww-future-card')).toHaveCount(4);
+    await expect(newFutureBtn(page)).toBeDisabled();
+    expect(log.errors).toEqual([]);
+  });
+
+  test('ledger and futures are visible on a narrow viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const log = await openLedgerAndFutures(page);
+    await expect(ledger(page)).toBeVisible();
+    await expect(futures(page)).toBeVisible();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect(log.errors).toEqual([]);
+  });
+});

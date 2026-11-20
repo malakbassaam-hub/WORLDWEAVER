@@ -15,6 +15,8 @@ import { InspectorPanel } from './ui/inspector';
 import { SelectionModel } from './ui/selection';
 import { StudioShell } from './ui/shell';
 import { TimelinePanel } from './ui/timeline';
+import { mountLedgerFutures } from './ui/ledgerFutures';
+import { SceneRendererFuturePreviewPresenter } from './render/future-preview-presenter';
 import { buildCrystalKingdom } from './worlds/crystalKingdom';
 
 /**
@@ -27,6 +29,7 @@ async function boot(host: HTMLElement) {
   const store = new WorldStore(genesis);
   const selection = new SelectionModel();
   let renderer: SceneRenderer | null = null;
+  let lf: ReturnType<typeof mountLedgerFutures> | null = null;
 
   // World Morph activation is server-side only. Never read import.meta.env in
   // client code (steering rule). The /api/director/health endpoint reports
@@ -140,6 +143,7 @@ async function boot(host: HTMLElement) {
         onContextLost: () => {
           shell.showFallback('The 3D context was lost', 'The GPU reset or ran out of memory. The viewport will restore automatically.');
           transitions?.cancel();
+          lf?.onContextLost();
         },
         onContextRestored: () => {
           if (!renderer) return;
@@ -147,6 +151,7 @@ async function boot(host: HTMLElement) {
           renderer.setSelection(selection.get());
           shell.hideFallback(renderer.domElement);
           shell.setQualityLabel(renderer.getQuality());
+          lf?.onContextRestored();
         },
       },
       genesis.seed,
@@ -160,6 +165,26 @@ async function boot(host: HTMLElement) {
         performanceMode: () => renderer!.getQuality() === 'performance',
       },
     );
+
+    // Mount Causal Ledger and Parallel Futures panels (per docs/ledger-futures/UI_INTEGRATION.md).
+    // The presenter bridges Kiro's FuturePreviewPresenter contract to Kilo's
+    // SceneRenderer previewFuture/cancelFuture API.
+    lf = mountLedgerFutures({
+      store,
+      initial: genesis,
+      request: (body, signal) => requestProposal(body, { signal }),
+      morphEnabled: MORPH_ENABLED,
+      presenter: new SceneRendererFuturePreviewPresenter(renderer!),
+      notify: (message, tone) => shell.toast(message, tone),
+      focusEntity: (id) => {
+        actions.select(id);
+        actions.focus(id);
+      },
+      reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+      onError: (e) => console.error(e),
+    });
+    shell.bottom.append(lf.ledger.element);
+    shell.right.append(lf.futures.element);
 
     let previous = store.getState();
     const unsubscribeStore = store.subscribe((world, log) => {
@@ -210,6 +235,7 @@ async function boot(host: HTMLElement) {
     return () => {
       window.removeEventListener('keydown', onKey);
       window.clearInterval(statsTimer);
+      lf?.dispose();
       directorPanel.dispose();
       director.dispose();
       unsubscribeStore();
@@ -226,6 +252,7 @@ async function boot(host: HTMLElement) {
     // Still render without a renderer so panels work.
     render();
     return () => {
+      lf?.dispose();
       directorPanel.dispose();
       director.dispose();
       host.replaceChildren();
