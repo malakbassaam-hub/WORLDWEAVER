@@ -182,7 +182,7 @@ export class LedgerPanel {
       this.list.append(
         h('li', { class: 'ww-ledger-row is-genesis' }, [
           h('div', { class: 'ww-ledger-head', attrs: { 'aria-label': 'Start of history' } }, [
-            h('span', { class: 'ww-ledger-index', text: `#${this.view.initial.seq}` }),
+            h('span', { class: 'ww-ledger-index', text: '—', title: `World seq #${this.view.initial.seq}` }),
             h('span', { class: 'ww-lf-badge is-system', text: 'Start' }),
             h('span', { class: 'ww-ledger-title', text: 'Initial world' }),
             h('span', { class: 'ww-ledger-effects', text: `state ${this.view.initial.fingerprint.slice(0, 8)}` }),

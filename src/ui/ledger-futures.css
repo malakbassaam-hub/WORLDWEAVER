@@ -1,6 +1,9 @@
 /* Causal Ledger and Parallel Futures panels. Uses the Luminous Night tokens
    from styles.css; every class is prefixed (ww-ledger-, ww-futures-, ww-lf-). */
 
+/* Class display rules must never override the hidden attribute. */
+.ww-ledger [hidden], .ww-futures [hidden], .ww-ledger[hidden], .ww-futures[hidden] { display: none !important; }
+
 .ww-lf-sr { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ------------------------------------------------------------ shared bits */
