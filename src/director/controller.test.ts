@@ -93,7 +93,7 @@ describe('DirectorController: happy path', () => {
   });
 
   it('reports health and labels recorded mode', async () => {
-    const { controller } = setup(async () => ok(CREATE), { health: { mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set' } });
+    const { controller } = setup(async () => ok(CREATE), { health: { mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set', morphEnabled: false } });
     expect(controller.getState().health.mode).toBe('checking');
     await controller.refreshHealth();
     expect(controller.getState().health).toMatchObject({ mode: 'recorded', liveReady: false, reason: 'GEMINI_API_KEY is not set' });

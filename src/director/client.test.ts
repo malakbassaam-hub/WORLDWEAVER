@@ -58,8 +58,8 @@ describe('requestProposal', () => {
 
 describe('fetchHealth', () => {
   it('returns safe health info, or null when unavailable', async () => {
-    const info = await fetchHealth({ fetchImpl: fakeFetch(200, { ok: true, mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set' }) });
-    expect(info).toEqual({ mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set' });
+    const info = await fetchHealth({ fetchImpl: fakeFetch(200, { ok: true, mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set', morphEnabled: false }) });
+    expect(info).toEqual({ mode: 'recorded', model: 'gemini-3.5-flash-lite', keyConfigured: false, liveReady: false, modeReason: 'GEMINI_API_KEY is not set', morphEnabled: false });
     expect(await fetchHealth({ fetchImpl: fakeFetch(500, {}) })).toBeNull();
     expect(await fetchHealth({ fetchImpl: fakeFetch(200, { ok: true, mode: 'other' }) })).toBeNull();
     expect(await fetchHealth({ fetchImpl: async () => { throw new TypeError('down'); } })).toBeNull();

@@ -267,7 +267,7 @@ export class DirectorPanel {
       },
     }, [h('span', { text: 'Apply' })]);
 
-    const morphInfo = isMorph ? this.morphPreviewInfo(t as any) : null;
+    const morphInfo = isMorph ? this.morphPreviewInfo(t as any, (id) => this.store.getState().entities[id]?.name ?? id) : null;
 
     return h('div', { class: `ww-director-card is-preview${blocked ? ' is-blocked' : ''}${isMorph ? ' is-morph' : ''}` }, [
       h('div', { class: 'ww-card-head' }, [
@@ -306,13 +306,13 @@ export class DirectorPanel {
     ]);
   }
 
-  private morphPreviewInfo(t: { pinned: readonly string[]; protectedAncestors: readonly string[]; pinRejections: number; violations: readonly { readonly id: string; readonly kind: string; readonly message: string }[]; blockedReason?: string; policyApproved: boolean }): HTMLElement {
+  private morphPreviewInfo(t: { pinned: readonly string[]; protectedAncestors: readonly string[]; pinRejections: number; violations: readonly { readonly id: string; readonly kind: string; readonly message: string }[]; blockedReason?: string; policyApproved: boolean }, nameForId: (id: string) => string): HTMLElement {
     const items: Array<string | HTMLElement> = [];
     if (t.pinned.length > 0) {
-      items.push(h('p', { class: 'ww-note', text: `Pinned entities (never animated): ${t.pinned.map((id) => `“${id}”`).join(', ')}` }));
+      items.push(h('p', { class: 'ww-note', text: `Pinned entities (never animated): ${t.pinned.map((id) => `“${nameForId(id)}”`).join(', ')}` }));
     }
     if (t.protectedAncestors.length > 0) {
-      items.push(h('p', { class: 'ww-note', text: `Protected ancestors: ${t.protectedAncestors.map((id) => `“${id}”`).join(', ')}` }));
+      items.push(h('p', { class: 'ww-note', text: `Protected ancestors: ${t.protectedAncestors.map((id) => `“${nameForId(id)}”`).join(', ')}` }));
     }
     if (t.blockedReason) {
       items.push(h('p', { class: 'ww-warn', text: t.blockedReason }));

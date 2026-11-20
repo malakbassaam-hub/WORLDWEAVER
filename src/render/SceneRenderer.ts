@@ -12,8 +12,18 @@ import { disposeSharedTextures } from './textures';
 export type QualityMode = 'cinematic' | 'performance';
 
 import type { WorldTransition } from '../core/presentation';
+import type { FuturePreview } from './future-preview';
 
 interface MorphTween {
+  readonly id: EntityId;
+  readonly binding: Binding;
+  readonly fromPos: THREE.Vector3;
+  readonly toPos: THREE.Vector3;
+  readonly start: number;
+  readonly duration: number;
+}
+
+interface FutureTween {
   readonly id: EntityId;
   readonly binding: Binding;
   readonly fromPos: THREE.Vector3;
@@ -111,6 +121,13 @@ export class SceneRenderer {
   private morphStartTime = 0;
   private morphDuration = 0;
   private morphCancelled = false;
+
+  /** Parallel Futures preview state (renderer side, Kilo Code). */
+  private futureTweens = new Map<EntityId, FutureTween>();
+  private futureStartTime = 0;
+  private futureDuration = 0;
+  private futureCancelled = false;
+  private futureBaseline: World | null = null;
 
   constructor(
     private readonly container: HTMLElement,
@@ -274,6 +291,7 @@ export class SceneRenderer {
     if (this.disposed) return;
     this.disposed = true;
     this.cancelTransition();
+    this.cancelFuture();
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     const canvas = this.renderer.domElement;
@@ -567,6 +585,7 @@ export class SceneRenderer {
   public rebuildResources(): void {
     if (this.disposed) return;
     this.cancelTransition();
+    this.cancelFuture();
     try {
       // The bloom composer's render target is context-bound; rebuild it on next setQuality.
       if (this.composer) {
@@ -695,6 +714,108 @@ export class SceneRenderer {
     this.morphCancelled = true;
     this.morphTweens.clear();
     this.refreshMarker();
+  }
+
+  /**
+   * Preview a Parallel Future without mutating the canonical world.
+   * Syncs the future state first (always correct), then animates changed,
+   * non-pinned entities from baseline to future positions over maxDurationMs.
+   * Pinned entities are never animated. Instant under reduced motion or
+   * Performance mode. Presentation only: never mutates World or dispatches
+   * events.
+   */
+  public async previewFuture(preview: FuturePreview): Promise<void> {
+    // World state is the truth: sync the future first, always correct.
+    this.sync(preview.future);
+
+    // Instant under reduced motion or Performance mode.
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    if (reducedMotion || this.quality === 'performance') {
+      this.refreshMarker();
+      return;
+    }
+
+    const pinned = new Set(preview.pinned);
+    const start = performance.now();
+    const duration = Math.max(1, preview.maxDurationMs) / 1000;
+    this.futureStartTime = start;
+    this.futureDuration = duration;
+    this.futureCancelled = false;
+    this.futureBaseline = preview.baseline;
+    this.futureTweens.clear();
+
+    // Build tweens for changed, non-pinned entities that have bindings.
+    for (const id of preview.changed) {
+      if (pinned.has(id)) continue;
+      const binding = this.bindings.get(id);
+      if (!binding) continue;
+      const beforeEntity = preview.baseline.entities[id];
+      const afterEntity = preview.future.entities[id];
+      if (!beforeEntity || !afterEntity) continue;
+      const fromPos = new THREE.Vector3(...beforeEntity.components.transform.position);
+      const toPos = new THREE.Vector3(...afterEntity.components.transform.position);
+      if (fromPos.equals(toPos)) continue;
+      this.futureTweens.set(id, {
+        id,
+        binding,
+        fromPos,
+        toPos,
+        start: start / 1000,
+        duration,
+      });
+    }
+
+    if (this.futureTweens.size === 0) {
+      this.refreshMarker();
+      return;
+    }
+
+    // Drive the tweens through the animation frame loop.
+    await new Promise<void>((resolve) => {
+      const step = () => {
+        if (this.futureCancelled) {
+          this.futureTweens.clear();
+          this.sync(this.futureBaseline!);
+          this.refreshMarker();
+          resolve();
+          return;
+        }
+        const now = performance.now() / 1000;
+        const k = Math.min(1, (now - this.futureStartTime / 1000) / this.futureDuration);
+        const ease = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+
+        for (const tween of this.futureTweens.values()) {
+          tween.binding.root.position.lerpVectors(tween.fromPos, tween.toPos, ease);
+        }
+
+        if (k >= 1) {
+          this.futureTweens.clear();
+          this.refreshMarker();
+          resolve();
+        } else {
+          requestAnimationFrame(step);
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  /** Stops a future preview at once and restores the canonical baseline world
+   *  exactly. Called on cancel, new edit, new preview, context loss and
+   *  dispose. */
+  public cancelFuture(): void {
+    this.futureCancelled = true;
+    this.futureTweens.clear();
+    if (this.futureBaseline) {
+      this.sync(this.futureBaseline);
+      this.futureBaseline = null;
+    }
+    this.refreshMarker();
+  }
+
+  /** Returns whether a future preview is currently active. */
+  public futurePreviewActive(): boolean {
+    return this.futureTweens.size > 0 || this.futureBaseline !== null;
   }
 }
 
