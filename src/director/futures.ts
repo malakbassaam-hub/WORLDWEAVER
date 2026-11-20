@@ -48,7 +48,8 @@ export function applyProposalToFuture(manager: FuturesManager, futureId: string,
   const translation = ctx.kind === 'morph' ? translateMorph(world, proposal, policy) : translateProposal(world, proposal);
   if (!translation.applicable) {
     const blocked = (translation as Partial<MorphTranslation>).blockedReason;
-    const reason = blocked ?? `${translation.rejected} of ${translation.outcomes.length} operations were rejected; the proposal cannot be applied.`;
+    const why = translation.outcomes.filter((o) => o.status === 'rejected' && o.reason).map((o) => o.reason).slice(0, 3).join(' ');
+    const reason = blocked ?? `${translation.rejected} of ${translation.outcomes.length} operations were rejected, so the proposal cannot be applied.${why ? ` ${why}` : ''}`;
     return { ok: false, code: 'NOT_APPLICABLE', reason, translation };
   }
   const meta = batchMetaFor(translation, {
