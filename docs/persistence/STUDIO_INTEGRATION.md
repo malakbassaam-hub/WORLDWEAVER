@@ -85,3 +85,11 @@ Rules:
 The browser tests cover: the panel mounting with the history-policy note; the dirty indicator following an edit and an undo; save, reload and Restore (renamed entity back, 27 entities, pinned citadel still pinned with Remove disabled, Undo disabled, "Restored baseline" row, notice toast); Export file name `*.worldweaver.world`, then Import with confirmation listing name, count and the unsaved-changes warning, nothing applied before confirming, round trip identical, no undo history; Cancel keeping the world and history; refusal of garbage, empty, wrong-extension, 3 MB, foreign-format, newer-version, tampered and wrong-field-type files with the world, dirty state and undo history unchanged; and a full localStorage reporting the error, keeping the world, with the previous good save still restorable.
 
 Not covered by a test: the reboot fallback when a new session throws; repeated reboots leaking WebGL contexts (needs a renderer memory probe); real-GPU rendering.
+
+### Lifecycle check (2026-11-21, later)
+
+`npx playwright test tests/e2e/persistence-lifecycle.spec.ts`: 2 passed (2.4 min).
+- 4 consecutive Import reboots, two with entirely different entity IDs: exactly one canvas each time, no fallback, Undo disabled, citadel pinned, then hover, click and rename work, Remove is disabled for the citadel, no WebGL context warnings, clean console.
+- After an Import: recorded Morph via the Director applies with the citadel preserved, Causal Ledger rows increase, one Undo returns to the restored state and the indicator reads "All changes saved".
+
+Renderer contract against Kilo's `f9775f7`: reviewed in code (see `docs/integration/INTEGRATION_READINESS_2026-11-21.md` section 3). Open point: WW-033 (context not force-released on dispose).

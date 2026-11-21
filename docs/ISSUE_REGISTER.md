@@ -42,7 +42,7 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-013 | Bundle is a single 664 kB chunk | Low | Kiro | 2026-11-30 | OPEN |
 | WW-014 | Draw-call count is high | Medium | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
 | WW-015 | Responsive layouts not verified | Medium | Kiro | 2026-11-26 | OPEN |
-| WW-016 | World state is in memory only | Medium | Kiro | 2026-11-28 | BLOCKED (decision) |
+| WW-016 | World state is in memory only | Medium | Kiro | 2026-11-28 | IN PROGRESS (verified on branch; closes on integration) |
 | WW-017 | Phase 1 not verified against Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (document) |
 | WW-018 | Phase 1.5 visual improvement list not available | Medium | Malak | 2026-11-24 | BLOCKED (list) |
 | WW-019 | Citadel close-up glow washes out detail | Low | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
@@ -56,11 +56,20 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | DONE |
 | WW-028 | Vite config loader warns about extensionless imports | Low | Kiro | 2026-12-01 | OPEN |
 | WW-029 | Browser suite is slow and contends with other agents on a shared machine | Low | Kiro | 2026-11-25 | OPEN |
-| WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | BLOCKED (approval) |
-| WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN |
-| WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | OPEN |
+| WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | IN PROGRESS (superseded path; see 2026-11-21 audit) |
+| WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN (D-WM-4 only) |
+| WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | DONE (integration line) |
+| WW-033 | Renderer dispose does not release the WebGL context immediately | Medium | Kilo Code | 2026-11-23 | OPEN |
+| WW-034 | Kilo's in-progress camera work edits Kiro-owned UI files | Low | Kilo Code / Kiro | 2026-11-22 | OPEN |
+| WW-035 | Kilo's camera work is uncommitted and unpushed | Medium | Kilo Code | 2026-11-21 | OPEN |
+| WW-036 | Full browser suite not run on the integrated tree | High | Kiro | 2026-11-22 | OPEN |
+| WW-037 | Session-reboot fallback path is untested | Low | Kiro | 2026-11-24 | OPEN |
+| WW-038 | Persistence panel not checked at narrow widths | Low | Kiro | 2026-11-24 | OPEN |
+| WW-039 | Agent terminal intermittently corrupts commands | Low | Malak (tooling) | 2026-11-22 | OPEN |
 
-**Totals:** 32 issues. Critical 1, High 7, Medium 15, Low 9. OPEN 11, BLOCKED 13, IN PROGRESS 2, DONE 6.
+**Totals:** 39 issues. Critical 1, High 8, Medium 17, Low 13. OPEN 17, BLOCKED 11, IN PROGRESS 4, DONE 7.
+
+IDs WW-033 to WW-039 were allocated by Kiro on 2026-11-21. Before this, no branch, remote ref or worktree file used them (`git grep` across all refs; file search across all `WORLDWEAVER*` worktrees). New issues from any agent start at WW-040.
 
 ---
 
@@ -851,6 +860,115 @@ These are design choices that Master Plan v1.2 might settle differently (WW-023)
 
 ---
 
+## 2026-11-21 audit (Kiro, branch `feature/persistence-studio-1121`)
+
+Status words in this section: **PASS** (acceptance met, evidence below), **FAIL**, **BLOCKED**, **DEFERRED**, **NOT TESTED**. "Previously reported" means a result from an earlier session that was not re-run today.
+
+| ID | 2026-11-21 status | Evidence today | Priority |
+|---|---|---|---|
+| WW-016 | PASS on branch (not yet integrated) | `ed99f75`: 7/7 `persistence.spec.ts`, 2/2 `persistence-lifecycle.spec.ts`, 52 focused unit tests. Edits survive a reload through an explicit Restore (not automatic, by design). Closes as DONE once merged into the integration branch with the full suite passing (WW-036). | P2 |
+| WW-029 | FAIL (recurred) | Today Kiro's runs collided with Kilo's suite on port 5199 ("already used") and two runs ended with exit -1 under about 300–600 MB free RAM. The coordination rule exists in `tech.md` but is not enforced. Fix: check port 5199 and running Playwright processes before starting; one agent runs browser suites at a time. | P2 |
+| WW-030 | PASS (previously reported), superseding path | The Phase 2 plus WebGL-recovery combination reached the integration line through `release/rc-2026-11-19` and `feature/integration-1120`, not through merging `116e97f`. `tests/e2e/webgl-recovery.spec.ts` (10 tests, `WEBGL_lose_context`) is on `ed99f75`; the earlier session reported 43/43 browser tests on `96a1422`. Not re-run today. Merging `116e97f` itself is no longer needed and is not recommended. Closes as DONE after WW-036. | P1 (through WW-036) |
+| WW-031 | BLOCKED (decision, D-WM-4 only) | D-WM-1 to D-WM-3 approved by Malak on 2026-11-19 (`docs/world-morph/IMPLEMENTATION_STATUS.md`). D-WM-4 (1200 ms transition) remains a proposal. | P3 |
+| WW-032 | PASS | On `ed99f75`: `.gitignore` has 0 NUL bytes; `git check-ignore -v test-results/x playwright-report/x .env` matches all three (lines 40, 127, 10); `git ls-files test-results playwright-report` prints nothing. `116e97f` still has the defect but is superseded (WW-030). | — |
+
+### WW-033 — Renderer dispose does not release the WebGL context immediately
+
+| Field | Value |
+|---|---|
+| Severity | Medium |
+| Owner | Kilo Code (`src/render/SceneRenderer.ts`) |
+| Target | 2026-11-23 |
+| Status | OPEN (NOT TESTED beyond 4 reboots) |
+
+**Description.** Restore and Import rebuild the session, which creates a new `SceneRenderer` and WebGL context each time. `SceneRenderer.dispose()` at `f9775f7` is otherwise thorough: idempotent, animation loop stopped, all canvas and controls listeners removed, bindings, environment, composer and shared textures disposed, canvas removed, and the frame, resize and transition steps guarded by `disposed`. It calls `renderer.dispose()` but not `renderer.forceContextLoss()`, so each old context lingers until garbage collection. Browsers allow about 16 live contexts and then drop the oldest with a console warning.
+
+**Acceptance criteria.**
+- `dispose()` releases the context (for example `forceContextLoss()` after listeners are removed), or a documented reason why not.
+- A browser test performs 20 consecutive Imports with no "Too many active WebGL contexts" warning, exactly one canvas, and a clean console.
+
+**Evidence.** Code review of `f9775f7` (`dispose()` at lines 383–407). `tests/e2e/persistence-lifecycle.spec.ts` on `ed99f75`: 4 consecutive Import reboots, one canvas, no context warnings, clean console (PASS). 20 reboots: NOT TESTED.
+
+### WW-034 — Kilo's in-progress camera work edits Kiro-owned UI files
+
+| Field | Value |
+|---|---|
+| Severity | Low (process) |
+| Owner | Kilo Code (propose); Kiro (apply) |
+| Target | 2026-11-22 |
+| Status | OPEN |
+
+**Description.** The uncommitted work in `C:\Users\user\WORLDWEAVER-CAMERA-CINEMATIC` (branch `feature/camera-cinematic-1121`, at `f9775f7`) changes `src/ui/shell.ts` (4 lines) and `src/ui/styles.css` (2 lines, a `.ww-viewport-hint` rule) as well as renderer files. `tech.md` assigns `src/ui/**` to Kiro, and Kilo proposes `shell.ts` changes through review. The change is small and additive: `git apply --check` of that UI diff against `ed99f75` succeeds.
+
+**Acceptance criteria.** Kilo commits the UI change separately with a handoff note, and Kiro reviews it before integration; or Kiro applies it on the integration branch.
+
+### WW-035 — Kilo's camera work is uncommitted and unpushed
+
+| Field | Value |
+|---|---|
+| Severity | Medium (risk of losing work) |
+| Owner | Kilo Code |
+| Target | 2026-11-21 |
+| Status | OPEN |
+
+**Description.** At the time of the audit, `feature/camera-cinematic-1121` has no commits beyond `f9775f7`, exists only locally, and carries uncommitted changes (`archetypes.ts` +521/−76 lines, `SceneRenderer.ts`, `shell.ts`, `styles.css`). A second Kilo worktree, `.kilo/worktrees/feature-camera-cinematic-1121-2-…` on `feature/camera-cinematic-1121-2`, sits at `1e03dff` with no changes. The main worktree shows `?? .kilo/` as untracked; only `.kilo/worktrees/` is excluded (through `.git/info/exclude`).
+
+**Acceptance criteria.** Kilo's work is committed and pushed to a named remote branch; `.kilo/` stays uncommitted (add `.kilo/` to the exclude file or `.gitignore` after approval).
+
+### WW-036 — Full browser suite not run on the integrated tree
+
+| Field | Value |
+|---|---|
+| Severity | High |
+| Owner | Kiro |
+| Target | 2026-11-22 |
+| Status | OPEN (NOT TESTED) |
+
+**Description.** No single tree containing persistence (`ed99f75`) and the cinematic renderer (`f9775f7` or later) has been tested. A trial merge is textually clean (`git merge-tree --write-tree ed99f75 f9775f7`: exit 0, tree `17b43cb`; only `src/main.ts` overlaps and auto-merges with both sides' changes present). On `ed99f75` alone, these ran today: the 7 persistence tests, the 2 lifecycle tests and 7 selected director tests (the phone-width test passed after a fix). Not run on `ed99f75`: `webgl-recovery.spec.ts`, `performance.spec.ts`, the rest of `director.spec.ts`, and `tests/ui/ledger-futures.spec.ts` (`playwright.ui.config.ts`).
+
+**Acceptance criteria.** On an approved integration branch: `npm run typecheck`, `npm test`, `npm run build`, `npx playwright test` (all `tests/e2e`) and `npx playwright test -c playwright.ui.config.ts` pass, run when no other agent is running a browser suite.
+
+### WW-037 — Session-reboot fallback path is untested
+
+| Field | Value |
+|---|---|
+| Severity | Low |
+| Owner | Kiro |
+| Target | 2026-11-24 |
+| Status | OPEN (NOT TESTED) |
+
+**Description.** If booting a restored world throws, `requestReboot` (`src/main.ts`) boots the previous world again, without its undo history. Reviewed in code only.
+
+**Acceptance criteria.** A test forces the new session to fail (for example a renderer constructor stub) and confirms the previous world, a notice and a clean recovery.
+
+### WW-038 — Persistence panel not checked at narrow widths
+
+| Field | Value |
+|---|---|
+| Severity | Low |
+| Owner | Kiro |
+| Target | 2026-11-24 |
+| Status | OPEN (NOT TESTED) |
+
+**Description.** The persistence tests run at 1600×900. The left-column scroll fix applies only above 860 px; at 390 px, Save, Import and the confirmation box have not been exercised. Part of WW-015.
+
+**Acceptance criteria.** At 390×844 and 1180×800, Save, Export, Import confirmation and Cancel are reachable and clickable, with no overlap.
+
+### WW-039 — Agent terminal intermittently corrupts commands
+
+| Field | Value |
+|---|---|
+| Severity | Low (tooling; affects evidence reliability) |
+| Owner | Malak (environment) |
+| Target | 2026-11-22 |
+| Status | OPEN |
+
+**Description.** On 2026-11-21, Kiro's PowerShell tool often prefixed the first token of a command with `ؤ` (U+0624), so the first statement failed and later ones ran. One long run was lost this way. Mitigation used: a harmless first statement (`$null = 0;`), and checking every output used as evidence. A likely cause is an Arabic keyboard layout or input-method state on the host terminal; not confirmed.
+
+**Acceptance criteria.** Cause identified, or a full session without the corruption.
+
+---
+
 ## Change log
 
 | Date | Change |
@@ -861,3 +979,4 @@ These are design choices that Master Plan v1.2 might settle differently (WW-023)
 | 2026-11-18 | Phase 2 Director implementation: WW-007, WW-010, WW-011, WW-012 and WW-027 DONE with evidence; WW-026 IN PROGRESS; WW-025 BLOCKED (needs a live run with Malak's key); evidence added to WW-015, WW-020 and WW-024. Added WW-028 and WW-029. No existing target dates changed. |
 | 2026-11-18 | Readiness: added WW-030 (integration risk; textual merge clean, semantic tests pending) and WW-031 (World Morph defaults). Evidence added to WW-001, WW-020 and WW-025; live-test runbook and World Morph plan written. No existing target dates changed. |
 | 2026-11-18 | Re-check after Kilo pushed `116e97f`: WW-030 trial merge now has 4 conflicts (dated update added; earlier "textually clean" finding kept for history). Added WW-032 (UTF-16 lines in the WebGL branch `.gitignore`). No existing target dates changed. |
+| 2026-11-21 | Integration-readiness audit on `feature/persistence-studio-1121`: WW-016 IN PROGRESS (passes on branch), WW-030 IN PROGRESS (superseded path), WW-032 DONE with evidence, WW-029 recurred. Added WW-033 to WW-039. No existing target dates changed. See `docs/integration/INTEGRATION_READINESS_2026-11-21.md`. |
