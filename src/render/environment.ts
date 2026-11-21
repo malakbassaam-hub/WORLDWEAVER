@@ -16,8 +16,8 @@ import {
  * and global lights. This is presentation, not world state; entities live in
  * the World and are built by archetypes.
  */
-export const FOG_COLOR = new THREE.Color('#1d1236');
-export const FOG_DENSITY = 0.0055;
+export const FOG_COLOR = new THREE.Color('#1a0f2e');
+export const FOG_DENSITY = 0.0045;
 export const SEA_LEVEL = -17;
 
 export interface Environment {
@@ -34,7 +34,7 @@ export function createEnvironment(seed: number): Environment {
   group.name = 'environment';
   const rng = createRng(seed ^ 0x5eed);
 
-  const sunDir = new THREE.Vector3(-0.66, 0.035, -0.75).normalize();
+  const sunDir = new THREE.Vector3(-0.55, 0.08, -0.83).normalize();
   const moonDir = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
   const timed: THREE.IUniform<number>[] = [];
   const track = (material: THREE.ShaderMaterial) => {
@@ -64,8 +64,8 @@ export function createEnvironment(seed: number): Environment {
   track(skyMaterial);
 
   // --- Distant mountain silhouettes -------------------------------------
-  group.add(mountainRing(330, 18, 70, '#120d26', seed + 11, 180));
-  group.add(mountainRing(250, 4, 46, '#0d0a1d', seed + 29, 160));
+  group.add(mountainRing(400, 22, 85, '#0f0a1e', seed + 11, 200));
+  group.add(mountainRing(300, 8, 55, '#0c0818', seed + 29, 180));
 
   // --- Sea -----------------------------------------------------------------
   const waterMaterial = new THREE.ShaderMaterial({
@@ -76,12 +76,12 @@ export function createEnvironment(seed: number): Environment {
       uSunDir: { value: sunDir },
       uFogColor: { value: FOG_COLOR },
       uFogDensity: { value: FOG_DENSITY },
-      uDeep: { value: new THREE.Color('#05040f') },
-      uGlow: { value: new THREE.Color('#1d8fff') },
+      uDeep: { value: new THREE.Color('#04030a') },
+      uGlow: { value: new THREE.Color('#1a7fff') },
     },
     fog: false,
   });
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(2400, 2400, 1, 1), waterMaterial);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(2800, 2800, 1, 1), waterMaterial);
   water.rotation.x = -Math.PI / 2;
   water.position.y = SEA_LEVEL;
   water.name = 'sea';
@@ -92,37 +92,40 @@ export function createEnvironment(seed: number): Environment {
   const mist = new THREE.Group();
   mist.name = 'mist';
   const mistTex = mistTexture();
-  for (let i = 0; i < 28; i++) {
+  for (let i = 0; i < 36; i++) {
     const material = new THREE.SpriteMaterial({
       map: mistTex,
-      color: rng.pick(['#6d5cff', '#8a6cff', '#3fb6ff', '#b07bff']),
+      color: rng.pick(['#5a4cff', '#7a5cff', '#3ab6ff', '#a06bff']),
       transparent: true,
-      opacity: rng.range(0.05, 0.12),
+      opacity: rng.range(0.04, 0.1),
       depthWrite: false,
       fog: true,
     });
     const sprite = new THREE.Sprite(material);
     const angle = rng.range(0, Math.PI * 2);
-    const radius = rng.range(8, 130);
-    sprite.position.set(Math.cos(angle) * radius, rng.range(SEA_LEVEL + 2, SEA_LEVEL + 9), Math.sin(angle) * radius);
-    const s = rng.range(45, 110);
-    sprite.scale.set(s, s * 0.45, 1);
+    const radius = rng.range(10, 160);
+    sprite.position.set(Math.cos(angle) * radius, rng.range(SEA_LEVEL + 3, SEA_LEVEL + 12), Math.sin(angle) * radius);
+    const s = rng.range(50, 130);
+    sprite.scale.set(s, s * 0.4, 1);
     mist.add(sprite);
   }
   group.add(mist);
 
   // --- Drifting luminous motes -------------------------------------------
-  const moteCount = 900;
+  const moteCount = 1200;
   const positions = new Float32Array(moteCount * 3);
   const colors = new Float32Array(moteCount * 3);
   const seeds = new Float32Array(moteCount);
-  const cyan = new THREE.Color('#40e0ff').multiplyScalar(1.6);
-  const violet = new THREE.Color('#9b6bff').multiplyScalar(1.6);
+  const warmCyan = new THREE.Color('#5ae8ff').multiplyScalar(1.4);
+  const warmViolet = new THREE.Color('#b88aff').multiplyScalar(1.4);
+  const warmGold = new THREE.Color('#ffd47a').multiplyScalar(1.2);
   for (let i = 0; i < moteCount; i++) {
     const a = rng.range(0, Math.PI * 2);
-    const r = Math.sqrt(rng.next()) * 75;
-    positions.set([Math.cos(a) * r, rng.range(-12, 38), Math.sin(a) * r], i * 3);
-    const c = rng.next() > 0.45 ? cyan : violet;
+    const r = Math.sqrt(rng.next()) * 85;
+    const y = rng.range(-15, 45);
+    positions.set([Math.cos(a) * r, y, Math.sin(a) * r], i * 3);
+    const pick = rng.next();
+    const c = pick > 0.6 ? warmCyan : (pick > 0.3 ? warmViolet : warmGold);
     colors.set([c.r, c.g, c.b], i * 3);
     seeds[i] = rng.next();
   }
@@ -144,29 +147,57 @@ export function createEnvironment(seed: number): Environment {
   group.add(motes);
   track(motesMaterial);
 
+  // --- Atmospheric fog layer ----------------------------------------------
+  const fogLayer = new THREE.Group();
+  fogLayer.name = 'fog-layer';
+  const fogTex = mistTexture();
+  for (let i = 0; i < 18; i++) {
+    const material = new THREE.SpriteMaterial({
+      map: fogTex,
+      color: rng.pick(['#2a1f4a', '#1f2a4a', '#2a2f4a']),
+      transparent: true,
+      opacity: rng.range(0.02, 0.06),
+      depthWrite: false,
+      fog: false,
+    });
+    const sprite = new THREE.Sprite(material);
+    const angle = rng.range(0, Math.PI * 2);
+    const radius = rng.range(60, 220);
+    sprite.position.set(Math.cos(angle) * radius, rng.range(-5, 25), Math.sin(angle) * radius);
+    const s = rng.range(120, 280);
+    sprite.scale.set(s, s * 0.3, 1);
+    fogLayer.add(sprite);
+  }
+  group.add(fogLayer);
+
   // --- Lights ------------------------------------------------------------
-  const hemi = new THREE.HemisphereLight('#4a5dff', '#080c26', 0.85);
+  const hemi = new THREE.HemisphereLight('#5a6cff', '#06081a', 0.65);
   group.add(hemi);
 
-  const keyLight = new THREE.DirectionalLight('#ffa855', 2.6);
-  keyLight.position.copy(new THREE.Vector3(-0.66, 0.3, -0.75).normalize().multiplyScalar(140));
-  keyLight.target.position.set(0, 0, 0);
+  const keyLight = new THREE.DirectionalLight('#ffb36b', 2.4);
+  keyLight.position.copy(new THREE.Vector3(-0.55, 0.25, -0.8).normalize().multiplyScalar(160));
+  keyLight.target.position.set(0, 8, 0);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.set(2048, 2048);
   const sc = keyLight.shadow.camera;
-  sc.left = -60;
-  sc.right = 60;
-  sc.top = 45;
-  sc.bottom = -45;
+  sc.left = -55;
+  sc.right = 55;
+  sc.top = 40;
+  sc.bottom = -40;
   sc.near = 20;
-  sc.far = 320;
-  keyLight.shadow.bias = -0.0004;
-  keyLight.shadow.normalBias = 0.5;
+  sc.far = 350;
+  keyLight.shadow.bias = -0.0003;
+  keyLight.shadow.normalBias = 0.4;
   group.add(keyLight, keyLight.target);
 
-  const moonLight = new THREE.DirectionalLight('#8fbaff', 0.65);
-  moonLight.position.copy(moonDir.clone().multiplyScalar(140));
+  const moonLight = new THREE.DirectionalLight('#8fbaff', 0.55);
+  moonLight.position.copy(moonDir.clone().multiplyScalar(160));
   group.add(moonLight);
+
+  // Subtle fill light for shadow detail
+  const fillLight = new THREE.DirectionalLight('#4080ff', 0.35);
+  fillLight.position.set(60, 40, 60);
+  group.add(fillLight);
 
   return {
     group,
@@ -174,7 +205,8 @@ export function createEnvironment(seed: number): Environment {
     update(time, camera) {
       for (const u of timed) u.value = time;
       sky.position.copy(camera.position);
-      mist.rotation.y = time * 0.004;
+      mist.rotation.y = time * 0.003;
+      fogLayer.rotation.y = time * 0.0015;
     },
     setShadows(enabled) {
       keyLight.castShadow = enabled;

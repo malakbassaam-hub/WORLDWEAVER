@@ -126,9 +126,9 @@ interface CameraTween {
   readonly duration: number;
 }
 
-const HOME_TARGET = new THREE.Vector3(0, 8, 0);
-const HOME_POSITION = new THREE.Vector3(44, 18, 50);
-const INTRO_POSITION = new THREE.Vector3(104, 46, 116);
+const HOME_TARGET = new THREE.Vector3(0, 10, 0);
+const HOME_POSITION = new THREE.Vector3(52, 22, 58);
+const INTRO_POSITION = new THREE.Vector3(120, 55, 135);
 const CLICK_TOLERANCE_PX = 5;
 
 const easeInOutCubic = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
@@ -236,7 +236,7 @@ export class SceneRenderer {
     this.domElement = renderer.domElement;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
+    renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
     // PCFSoftShadowMap was removed in three r0.18x; PCF is the supported soft-edged option.
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -245,7 +245,7 @@ export class SceneRenderer {
     renderer.domElement.setAttribute('aria-label', 'WORLDWEAVER 3D viewport');
     container.appendChild(renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 1400);
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.5, 1400);
     this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), FOG_DENSITY);
     this.scene.background = FOG_COLOR.clone();
 
@@ -258,10 +258,11 @@ export class SceneRenderer {
 
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.07;
-    this.controls.minDistance = 8;
-    this.controls.maxDistance = 190;
-    this.controls.maxPolarAngle = Math.PI * 0.56;
+    this.controls.dampingFactor = 0.08;
+    this.controls.minDistance = 6;
+    this.controls.maxDistance = 220;
+    this.controls.minPolarAngle = 0.05;
+    this.controls.maxPolarAngle = Math.PI * 0.52;
     this.controls.screenSpacePanning = true;
     this.controls.target.copy(HOME_TARGET);
     this.controls.addEventListener('start', this.cancelTween);
@@ -276,6 +277,7 @@ export class SceneRenderer {
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('webglcontextlost', this.onContextLost);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
 
@@ -392,6 +394,7 @@ export class SceneRenderer {
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    canvas.removeEventListener('dblclick', this.onDoubleClick);
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.removeEventListener('start', this.cancelTween);
@@ -560,6 +563,17 @@ export class SceneRenderer {
     this.setHover(null, 0, 0);
   };
 
+  private onDoubleClick = (event: MouseEvent) => {
+    const id = this.pick(event.clientX, event.clientY);
+    if (id) {
+      this.callbacks.onSelect?.(id);
+      this.focus(id);
+    } else {
+      this.callbacks.onSelect?.(null);
+      this.resetCamera();
+    }
+  };
+
   private setHover(id: EntityId | null, x: number, y: number) {
     if (id !== this.hoveredId) {
       this.hoveredId = id;
@@ -642,8 +656,8 @@ export class SceneRenderer {
     });
     const composer = new EffectComposer(this.renderer, target);
     composer.addPass(new RenderPass(this.scene, this.camera));
-    // Threshold sits above the sky's brightest values so only emissive elements bloom.
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.8, 0.55, 0.9));
+    // Controlled bloom: lower strength, tighter radius, higher threshold to avoid sky washout.
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.4, 0.92));
     composer.addPass(new OutputPass());
     return composer;
   }

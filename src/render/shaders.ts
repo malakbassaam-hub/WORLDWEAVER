@@ -4,22 +4,22 @@ export const SKY_FUNCTION_GLSL = /* glsl */ `
   uniform vec3 uSunDir;
   vec3 skyColor(vec3 dir) {
     float h = dir.y;
-    vec3 zenith      = vec3(0.012, 0.010, 0.050);
-    vec3 upper       = vec3(0.045, 0.030, 0.150);
-    vec3 mid         = vec3(0.090, 0.032, 0.170);
-    vec3 horizonCool = vec3(0.110, 0.055, 0.260);
-    vec3 horizonWarm = vec3(0.520, 0.150, 0.130);
+    vec3 zenith      = vec3(0.015, 0.012, 0.055);
+    vec3 upper       = vec3(0.050, 0.035, 0.160);
+    vec3 mid         = vec3(0.100, 0.040, 0.190);
+    vec3 horizonCool = vec3(0.120, 0.060, 0.280);
+    vec3 horizonWarm = vec3(0.580, 0.180, 0.140);
     vec2 flatDir = normalize(dir.xz + vec2(1e-5));
     vec2 flatSun = normalize(uSunDir.xz + vec2(1e-5));
     float sunAmt = max(dot(flatDir, flatSun), 0.0);
-    vec3 horizon = mix(horizonCool, horizonWarm, pow(sunAmt, 3.0));
-    vec3 col = mix(horizon, mid, smoothstep(-0.02, 0.16, h));
-    col = mix(col, upper, smoothstep(0.10, 0.42, h));
-    col = mix(col, zenith, smoothstep(0.38, 0.95, h));
-    col = mix(col, vec3(0.045, 0.030, 0.110), smoothstep(0.0, -0.22, h));
+    vec3 horizon = mix(horizonCool, horizonWarm, pow(sunAmt, 3.5));
+    vec3 col = mix(horizon, mid, smoothstep(-0.03, 0.18, h));
+    col = mix(col, upper, smoothstep(0.12, 0.45, h));
+    col = mix(col, zenith, smoothstep(0.40, 0.95, h));
+    col = mix(col, vec3(0.050, 0.035, 0.120), smoothstep(0.0, -0.25, h));
     float sd = max(dot(normalize(dir), uSunDir), 0.0);
-    col += vec3(1.0, 0.42, 0.22) * pow(sd, 48.0) * 0.45;
-    col += vec3(0.75, 0.22, 0.42) * pow(sd, 6.0) * 0.08;
+    col += vec3(1.0, 0.45, 0.24) * pow(sd, 50.0) * 0.5;
+    col += vec3(0.80, 0.25, 0.45) * pow(sd, 7.0) * 0.1;
     return col;
   }
 `;

@@ -12,6 +12,7 @@ const ARCHETYPE_NAMES: Readonly<Record<ProposalArchetype, string>> = {
   crystalSpire: 'crystal spire',
   crystalCluster: 'crystal cluster',
   crystalCitadel: 'crystal citadel',
+  castle: 'castle',
   arcaneRing: 'arcane ring',
   lightOrb: 'light orb',
   obelisk: 'obelisk',

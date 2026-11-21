@@ -250,94 +250,471 @@ const crystalCluster: ArchetypeFactory = (entity) => {
 };
 
 // ---------------------------------------------------------------------------
-// Citadel (focal point)
+// Castle (focal point) — Architectural fantasy citadel
 // ---------------------------------------------------------------------------
 
-const crystalCitadel: ArchetypeFactory = (entity) => {
+function castleWallSegment(rng: ReturnType<typeof createRng>, paints: Paint[], stoneMat: THREE.MeshStandardMaterial): THREE.Group {
+  const group = new THREE.Group();
+  const wallWidth = rng.range(3.5, 5.5);
+  const wallHeight = rng.range(4.5, 6.5);
+  const wallDepth = 0.8;
+
+  // Main wall block
+  const wallGeo = new THREE.BoxGeometry(wallWidth, wallHeight, wallDepth);
+  const wall = new THREE.Mesh(wallGeo, stoneMat);
+  wall.position.y = wallHeight / 2;
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  group.add(wall);
+
+  // Battlements on top
+  const merlonCount = Math.floor(wallWidth / 0.7);
+  for (let i = 0; i < merlonCount; i++) {
+    const merlonGeo = new THREE.BoxGeometry(0.45, 1.2, 0.9);
+    const merlon = new THREE.Mesh(merlonGeo, stoneMat);
+    merlon.position.set((i - (merlonCount - 1) / 2) * 0.7, wallHeight + 0.6, 0);
+    merlon.castShadow = true;
+    group.add(merlon);
+  }
+
+  // Arrow slits / windows
+  const slitCount = rng.int(2, 4);
+  for (let i = 0; i < slitCount; i++) {
+    const slitGeo = new THREE.BoxGeometry(0.15, 1.0, 0.9);
+    const slitMat = new THREE.MeshBasicMaterial({ color: '#ffb36b', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+    const slit = new THREE.Mesh(slitGeo, slitMat);
+    slit.position.set((i - (slitCount - 1) / 2) * 1.2, wallHeight * 0.4, wallDepth / 2 + 0.01);
+    slit.userData = { ...NO_PICK };
+    group.add(slit);
+    paints.push((v) => {
+      slitMat.color.set(v.emissive);
+      slitMat.opacity = 0.6 + v.emissiveIntensity * 0.2;
+    });
+  }
+
+  return group;
+}
+
+function castleTower(rng: ReturnType<typeof createRng>, paints: Paint[], stoneMat: THREE.MeshStandardMaterial, trimMat: THREE.LineBasicMaterial, isMain: boolean): THREE.Group {
+  const group = new THREE.Group();
+  const baseRadius = isMain ? rng.range(3.5, 4.5) : rng.range(1.8, 2.5);
+  const height = isMain ? rng.range(18, 24) : rng.range(12, 16);
+  const segments = 8;
+
+  // Tower shaft (slightly tapered)
+  const towerGeo = new THREE.CylinderGeometry(baseRadius * 0.75, baseRadius, height, segments);
+  const tower = new THREE.Mesh(towerGeo, stoneMat);
+  tower.position.y = height / 2;
+  tower.castShadow = true;
+  tower.receiveShadow = true;
+  group.add(tower);
+
+  // Tower edges highlight
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(towerGeo), trimMat);
+  edges.userData = { ...NO_PICK };
+  tower.add(edges);
+
+  // Battlements at top
+  const merlonCount = segments;
+  for (let i = 0; i < merlonCount; i++) {
+    const a = (i / merlonCount) * Math.PI * 2;
+    const merlonGeo = new THREE.BoxGeometry(0.5, 1.4, 0.9);
+    const merlon = new THREE.Mesh(merlonGeo, stoneMat);
+    merlon.position.set(Math.cos(a) * (baseRadius * 0.75 + 0.25), height + 0.7, Math.sin(a) * (baseRadius * 0.75 + 0.25));
+    merlon.rotation.y = a;
+    merlon.castShadow = true;
+    group.add(merlon);
+  }
+
+  // Conical roof
+  const roofGeo = new THREE.ConeGeometry(baseRadius * 0.9, baseRadius * 1.3, segments);
+  const roofMat = new THREE.MeshStandardMaterial({ color: '#1a1230', roughness: 0.4, metalness: 0.5 });
+  const roof = new THREE.Mesh(roofGeo, roofMat);
+  roof.position.y = height + baseRadius * 0.65;
+  roof.castShadow = true;
+  group.add(roof);
+
+  // Roof trim
+  const roofEdges = new THREE.LineSegments(new THREE.EdgesGeometry(roofGeo), trimMat);
+  roofEdges.userData = { ...NO_PICK };
+  roof.add(roofEdges);
+
+  // Roof finial (crystal accent)
+  const finial = crystal(0.35, rng.range(1.5, 2.5), paints, 1.2);
+  finial.position.y = height + baseRadius * 1.3 + rng.range(0.5, 1.0);
+  group.add(finial);
+
+  // Windows with warm glow
+  const floorCount = isMain ? rng.int(5, 7) : rng.int(3, 5);
+  for (let f = 0; f < floorCount; f++) {
+    const y = (f + 1) / (floorCount + 1) * height;
+    const windowCount = isMain ? 4 : 2;
+    for (let w = 0; w < windowCount; w++) {
+      const a = (w / windowCount) * Math.PI * 2 + rng.range(-0.15, 0.15);
+      const windowGeo = new THREE.BoxGeometry(0.5, 0.9, 0.15);
+      const windowMat = new THREE.MeshBasicMaterial({ color: '#ffb36b', transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+      const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+      const r = baseRadius * (0.7 + (f / floorCount) * 0.2);
+      windowMesh.position.set(Math.cos(a) * r, y, Math.sin(a) * r);
+      windowMesh.rotation.y = a;
+      windowMesh.userData = { ...NO_PICK };
+      group.add(windowMesh);
+      paints.push((v) => {
+        windowMat.color.set(v.emissive);
+        windowMat.opacity = 0.7 + v.emissiveIntensity * 0.25;
+      });
+    }
+  }
+
+  // Decorative crystal accents on tower
+  if (rng.next() > 0.5) {
+    const accentCount = isMain ? rng.int(2, 4) : rng.int(1, 2);
+    for (let i = 0; i < accentCount; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const r = baseRadius * 0.5;
+      const accent = crystal(rng.range(0.2, 0.35), rng.range(1.0, 1.8), paints, 1.1);
+      accent.position.set(Math.cos(a) * r, rng.range(height * 0.3, height * 0.8), Math.sin(a) * r);
+      group.add(accent);
+    }
+  }
+
+  return group;
+}
+
+function castleGate(paints: Paint[], stoneMat: THREE.MeshStandardMaterial, trimMat: THREE.LineBasicMaterial): THREE.Group {
+  const group = new THREE.Group();
+  const gateWidth = 5;
+  const gateHeight = 7;
+  const gateDepth = 2;
+
+  // Gate arch
+  const archGeo = new THREE.CylinderGeometry(gateWidth / 2, gateWidth / 2, gateDepth, 16, 1, true, 0, Math.PI);
+  const arch = new THREE.Mesh(archGeo, stoneMat);
+  arch.position.set(0, gateHeight / 2, 0);
+  arch.rotation.z = Math.PI / 2;
+  arch.castShadow = true;
+  arch.receiveShadow = true;
+  group.add(arch);
+
+  // Arch trim
+  const archEdges = new THREE.LineSegments(new THREE.EdgesGeometry(archGeo), trimMat);
+  archEdges.userData = { ...NO_PICK };
+  arch.add(archEdges);
+
+  // Side towers flanking gate
+  for (const side of [-1, 1]) {
+    const towerGeo = new THREE.CylinderGeometry(1.8, 2.2, gateHeight + 4, 8);
+    const tower = new THREE.Mesh(towerGeo, stoneMat);
+    tower.position.set(side * (gateWidth / 2 + 1.8), (gateHeight + 4) / 2, 0);
+    tower.castShadow = true;
+    tower.receiveShadow = true;
+    group.add(tower);
+
+    // Battlements on gate towers
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      const merlonGeo = new THREE.BoxGeometry(0.45, 1.2, 0.9);
+      const merlon = new THREE.Mesh(merlonGeo, stoneMat);
+      merlon.position.set(
+        side * (gateWidth / 2 + 1.8) + Math.cos(a) * 1.8,
+        gateHeight + 4 + 0.6,
+        Math.sin(a) * 1.8
+      );
+      merlon.rotation.y = a;
+      merlon.castShadow = true;
+      group.add(merlon);
+    }
+
+    // Conical roofs on gate towers
+    const roofGeo = new THREE.ConeGeometry(2.0, 3.0, 8);
+    const roofMat = new THREE.MeshStandardMaterial({ color: '#1a1230', roughness: 0.4, metalness: 0.5 });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.set(side * (gateWidth / 2 + 1.8), gateHeight + 4 + 1.5, 0);
+    roof.castShadow = true;
+    group.add(roof);
+
+    // Crystal finials
+    const finial = crystal(0.3, 1.5, paints, 1.2);
+    finial.position.set(side * (gateWidth / 2 + 1.8), gateHeight + 4 + 3.0, 0);
+    group.add(finial);
+  }
+
+  // Portcullis suggestion (vertical bars)
+  const barCount = 8;
+  for (let i = 0; i < barCount; i++) {
+    const barGeo = new THREE.BoxGeometry(0.08, gateHeight * 0.85, 0.15);
+    const barMat = new THREE.MeshStandardMaterial({ color: '#2a1a35', roughness: 0.3, metalness: 0.7 });
+    const bar = new THREE.Mesh(barGeo, barMat);
+    bar.position.set((i - (barCount - 1) / 2) * (gateWidth / barCount), gateHeight * 0.425, gateDepth / 2);
+    group.add(bar);
+  }
+
+  // Glowing lanterns beside gate
+  for (const side of [-1, 1]) {
+    const lantern = crystal(0.2, 0.8, paints, 1.5);
+    lantern.position.set(side * (gateWidth / 2 + 2.5), 3.5, gateDepth / 2 + 1.5);
+    group.add(lantern);
+  }
+
+  return group;
+}
+
+function castleBridge(rng: ReturnType<typeof createRng>, stoneMat: THREE.MeshStandardMaterial): THREE.Group {
+  const group = new THREE.Group();
+  const length = rng.range(8, 12);
+  const width = 3.5;
+  const height = 0.6;
+
+  // Bridge deck
+  const deckGeo = new THREE.BoxGeometry(width, height, length);
+  const deck = new THREE.Mesh(deckGeo, stoneMat);
+  deck.position.set(0, height / 2, 0);
+  deck.castShadow = true;
+  deck.receiveShadow = true;
+  group.add(deck);
+
+  // Railings
+  const railingGeo = new THREE.BoxGeometry(0.15, 1.2, length - 0.5);
+  const railingMat = new THREE.MeshStandardMaterial({ color: '#1a1230', roughness: 0.5, metalness: 0.4 });
+  for (const side of [-1, 1]) {
+    const railing = new THREE.Mesh(railingGeo, railingMat);
+    railing.position.set(side * (width / 2 + 0.075), height + 0.6, 0);
+    railing.castShadow = true;
+    group.add(railing);
+  }
+
+  // Support arches underneath
+  const archCount = Math.floor(length / 2.5);
+  for (let i = 0; i < archCount; i++) {
+    const z = (i - (archCount - 1) / 2) * (length / archCount);
+    const archGeo = new THREE.CylinderGeometry(width / 2 + 0.3, width / 2 + 0.3, 0.4, 12, 1, true, 0, Math.PI);
+    const arch = new THREE.Mesh(archGeo, stoneMat);
+    arch.position.set(0, -0.2, z);
+    arch.rotation.z = Math.PI / 2;
+    arch.castShadow = true;
+    group.add(arch);
+  }
+
+  return group;
+}
+
+function castleKeep(rng: ReturnType<typeof createRng>, paints: Paint[], stoneMat: THREE.MeshStandardMaterial, trimMat: THREE.LineBasicMaterial): THREE.Group {
+  const group = new THREE.Group();
+  const keepWidth = rng.range(10, 14);
+  const keepDepth = rng.range(8, 12);
+  const keepHeight = rng.range(14, 18);
+
+  // Main keep block
+  const keepGeo = new THREE.BoxGeometry(keepWidth, keepHeight, keepDepth);
+  const keep = new THREE.Mesh(keepGeo, stoneMat);
+  keep.position.y = keepHeight / 2;
+  keep.castShadow = true;
+  keep.receiveShadow = true;
+  group.add(keep);
+
+  // Keep edges
+  const edges = new THREE.LineSegments(new THREE.EdgesGeometry(keepGeo), trimMat);
+  edges.userData = { ...NO_PICK };
+  keep.add(edges);
+
+  // Battlements on keep
+  const perimeter = 2 * (keepWidth + keepDepth);
+  const merlonCount = Math.floor(perimeter / 0.7);
+  for (let i = 0; i < merlonCount; i++) {
+    const t = i / merlonCount;
+    let x, z;
+    if (t < keepWidth / perimeter) {
+      x = (t * perimeter - keepWidth / 2);
+      z = keepDepth / 2;
+    } else if (t < (keepWidth + keepDepth) / perimeter) {
+      x = keepWidth / 2;
+      z = ((t - keepWidth / perimeter) * perimeter - keepDepth / 2);
+    } else if (t < (2 * keepWidth + keepDepth) / perimeter) {
+      x = keepWidth / 2 - ((t - (keepWidth + keepDepth) / perimeter) * perimeter - keepWidth / 2);
+      z = -keepDepth / 2;
+    } else {
+      x = -keepWidth / 2;
+      z = -keepDepth / 2 + ((t - (2 * keepWidth + keepDepth) / perimeter) * perimeter - keepDepth / 2);
+    }
+    const merlonGeo = new THREE.BoxGeometry(0.5, 1.3, 0.9);
+    const merlon = new THREE.Mesh(merlonGeo, stoneMat);
+    merlon.position.set(x, keepHeight + 0.65, z);
+    merlon.castShadow = true;
+    group.add(merlon);
+  }
+
+  // Corner towers on keep
+  for (const cx of [-1, 1]) {
+    for (const cz of [-1, 1]) {
+      const tower = castleTower(rng, paints, stoneMat, trimMat, false);
+      tower.position.set(cx * (keepWidth / 2 + 1.5), 0, cz * (keepDepth / 2 + 1.5));
+      group.add(tower);
+    }
+  }
+
+  // Windows on keep
+  const floorCount = rng.int(4, 5);
+  for (let f = 0; f < floorCount; f++) {
+    const y = (f + 1) / (floorCount + 1) * keepHeight;
+    for (const face of ['front', 'back', 'left', 'right']) {
+      const windowCount = rng.int(2, 3);
+      for (let w = 0; w < windowCount; w++) {
+        let x = 0, z = 0, rotY = 0;
+        const offset = (w - (windowCount - 1) / 2) * 2.5;
+        if (face === 'front') { x = offset; z = keepDepth / 2 + 0.05; rotY = Math.PI; }
+        else if (face === 'back') { x = -offset; z = -keepDepth / 2 - 0.05; rotY = 0; }
+        else if (face === 'left') { x = -keepWidth / 2 - 0.05; z = offset; rotY = -Math.PI / 2; }
+        else { x = keepWidth / 2 + 0.05; z = -offset; rotY = Math.PI / 2; }
+        const windowGeo = new THREE.BoxGeometry(0.8, 1.2, 0.15);
+        const windowMat = new THREE.MeshBasicMaterial({ color: '#ffb36b', transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending });
+        const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+        windowMesh.position.set(x, y, z);
+        windowMesh.rotation.y = rotY;
+        windowMesh.userData = { ...NO_PICK };
+        group.add(windowMesh);
+        paints.push((v) => {
+          windowMat.color.set(v.emissive);
+          windowMat.opacity = 0.7 + v.emissiveIntensity * 0.25;
+        });
+      }
+    }
+  }
+
+  // Central spire on keep roof
+  const spire = castleTower(rng, paints, stoneMat, trimMat, true);
+  spire.position.y = keepHeight;
+  group.add(spire);
+
+  return group;
+}
+
+const castle: ArchetypeFactory = (entity) => {
   const rng = createRng(hashString(entity.id));
   const paints: Paint[] = [];
+
+  // Warm stone for castle, cool trim for dusk contrast
+  const stoneMat = new THREE.MeshStandardMaterial({ color: '#1e1830', roughness: 0.5, metalness: 0.3 });
+  const trimMat = new THREE.LineBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  paints.push((v) => hdr(trimMat.color, v.emissive, 0.45 + v.emissiveIntensity * 0.75));
+
   const body = new THREE.Group();
 
-  // Deep stone base with warm-lit trim; cool shadow side for dusk contrast.
-  const stoneMat = new THREE.MeshStandardMaterial({ color: '#161228', roughness: 0.55, metalness: 0.35 });
-  const trimMat = new THREE.LineBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  paints.push((v) => hdr(trimMat.color, v.emissive, 0.5 + v.emissiveIntensity * 0.8));
+  // Main keep (central palace)
+  const keep = castleKeep(rng, paints, stoneMat, trimMat);
+  body.add(keep);
 
-  // Six stepped tiers, each smaller than the last, for a layered pyramidal silhouette.
-  const tiers: Array<[number, number, number, number]> = [
-    [7.4, 8.6, 1.1, 0.15],
-    [5.8, 6.6, 0.95, 1.2],
-    [4.4, 5.1, 0.85, 2.1],
-    [3.2, 3.8, 0.75, 2.8],
-    [2.2, 2.7, 0.65, 3.45],
-    [1.4, 1.8, 0.55, 4.0],
-  ];
-  for (const [rt, rb, h, y] of tiers) {
-    const geo = new THREE.CylinderGeometry(rt, rb, h, 10);
-    const tier = new THREE.Mesh(geo, stoneMat);
-    tier.position.y = y + h / 2 - 0.15;
-    tier.castShadow = true;
-    tier.receiveShadow = true;
-    const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), trimMat);
-    edges.userData = { ...NO_PICK };
-    tier.add(edges);
-    body.add(tier);
+  // Compute keep height from bounding box for spire placement
+  const keepBox = new THREE.Box3().setFromObject(keep);
+  const keepHeight = keepBox.max.y - keepBox.min.y;
+
+  // Curtain walls connecting to corner towers
+  const wallRadius = rng.range(16, 20);
+  const wallCount = rng.int(6, 8);
+  for (let i = 0; i < wallCount; i++) {
+    const a = (i / wallCount) * Math.PI * 2 + rng.range(-0.1, 0.1);
+    const wall = castleWallSegment(rng, paints, stoneMat);
+    wall.position.set(Math.cos(a) * wallRadius, 0, Math.sin(a) * wallRadius);
+    wall.rotation.y = a + Math.PI / 2;
+    body.add(wall);
   }
 
-  // Buttress-like corner pinnacles on the base tier.
+  // Corner towers on walls
+  const towerCount = wallCount;
+  for (let i = 0; i < towerCount; i++) {
+    const a = (i / towerCount) * Math.PI * 2;
+    const r = wallRadius + rng.range(1.5, 3.0);
+    const tower = castleTower(rng, paints, stoneMat, trimMat, false);
+    tower.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
+    body.add(tower);
+  }
+
+  // Grand gate complex
+  const gateAngle = rng.range(0, Math.PI * 2);
+  const gate = castleGate(paints, stoneMat, trimMat);
+  gate.position.set(Math.cos(gateAngle) * (wallRadius - 1), 0, Math.sin(gateAngle) * (wallRadius - 1));
+  gate.rotation.y = gateAngle + Math.PI;
+  body.add(gate);
+
+  // Bridge from gate to inner ward
+  const bridge = castleBridge(rng, stoneMat);
+  bridge.position.set(Math.cos(gateAngle) * (wallRadius / 2), 0.5, Math.sin(gateAngle) * (wallRadius / 2));
+  bridge.rotation.y = gateAngle + Math.PI;
+  body.add(bridge);
+
+  // Inner ward buildings (smaller structures)
+  const buildingCount = rng.int(3, 5);
+  for (let i = 0; i < buildingCount; i++) {
+    const a = rng.range(0, Math.PI * 2);
+    const r = rng.range(wallRadius * 0.2, wallRadius * 0.5);
+    const bGeo = new THREE.BoxGeometry(rng.range(3, 5), rng.range(4, 7), rng.range(3, 5));
+    const building = new THREE.Mesh(bGeo, stoneMat);
+    building.position.set(Math.cos(a) * r, bGeo.parameters.height / 2, Math.sin(a) * r);
+    building.rotation.y = rng.range(0, Math.PI * 2);
+    building.castShadow = true;
+    building.receiveShadow = true;
+    body.add(building);
+
+    // Roof
+    const roofGeo = new THREE.ConeGeometry(Math.max(bGeo.parameters.width, bGeo.parameters.depth) / 2 * 1.2, 2.5, 4);
+    const roofMat = new THREE.MeshStandardMaterial({ color: '#1a1230', roughness: 0.4, metalness: 0.5 });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.set(building.position.x, building.position.y + bGeo.parameters.height / 2 + 1.25, building.position.z);
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    building.add(roof);
+
+    // Windows
+    for (let f = 0; f < 2; f++) {
+      const y = (f + 1) / 3 * bGeo.parameters.height;
+      const windowGeo = new THREE.BoxGeometry(0.6, 0.9, 0.1);
+      const windowMat = new THREE.MeshBasicMaterial({ color: '#ffb36b', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending });
+      const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+      windowMesh.position.set(0, y, bGeo.parameters.depth / 2 + 0.05);
+      windowMesh.userData = { ...NO_PICK };
+      building.add(windowMesh);
+      paints.push((v) => {
+        windowMat.color.set(v.emissive);
+        windowMat.opacity = 0.7 + v.emissiveIntensity * 0.25;
+      });
+    }
+  }
+
+  // Central spire with crystal crown (the magical heart)
+  const spireBase = keepHeight + 2;
+  const mainSpire = crystal(2.0, 22, paints, 1.3);
+  mainSpire.position.y = spireBase;
+  body.add(mainSpire);
+
+  // Guardian spires around central spire
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const pinnacle = crystal(0.35, 2.2, paints);
-    pinnacle.position.set(Math.cos(a) * 7.2, 1.35, Math.sin(a) * 7.2);
-    pinnacle.rotation.set(Math.sin(a) * 0.15, 0, -Math.cos(a) * 0.15);
-    body.add(pinnacle);
-  }
-
-  // Lantern pillars on the lowest tier with warm glows.
-  for (let i = 0; i < 6; i++) {
-    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 2.8, 8), stoneMat);
-    pillar.position.set(Math.cos(a) * 6.6, 2.4, Math.sin(a) * 6.6);
-    pillar.castShadow = true;
-    body.add(pillar);
-    const tip = crystal(0.28, 1.3, paints, 1.3);
-    tip.position.set(pillar.position.x, 3.85, pillar.position.z);
-    body.add(tip);
-  }
-
-  // Central spire with four guardian spires and a dramatic floating crown.
-  const spireBase = 2.6;
-  const main = crystal(1.9, 18.5, paints, 1.2);
-  main.position.y = spireBase;
-  body.add(main);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const g = crystal(0.85, rng.range(8.5, 10.5), paints);
-    g.position.set(Math.cos(a) * 3.0, spireBase - 0.3, Math.sin(a) * 3.0);
-    g.rotation.set(Math.sin(a) * 0.14, 0, -Math.cos(a) * 0.14);
+    const g = crystal(0.9, rng.range(10, 13), paints);
+    g.position.set(Math.cos(a) * 3.5, spireBase - 0.5, Math.sin(a) * 3.5);
+    g.rotation.set(Math.sin(a) * 0.12, 0, -Math.cos(a) * 0.12);
     body.add(g);
   }
 
-  // Floating crown crystal above the spire — slow bob and rotate.
+  // Floating crown crystal
   const crownPivot = new THREE.Group();
-  crownPivot.position.y = 24.4;
-  const crownShellMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.08, metalness: 0.4, transparent: true, opacity: 0.85, depthWrite: false });
-  const crown = new THREE.Mesh(new THREE.OctahedronGeometry(1.4, 0), crownShellMat);
-  crown.scale.y = 1.8;
+  const crownHeight = spireBase + 24;
+  crownPivot.position.y = crownHeight;
+  const crownShellMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.08, metalness: 0.35, transparent: true, opacity: 0.8, depthWrite: false });
+  const crown = new THREE.Mesh(new THREE.OctahedronGeometry(1.5, 0), crownShellMat);
+  crown.scale.y = 2.0;
   const crownCoreMat = new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-  const crownCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.62, 0), crownCoreMat);
-  crownCore.scale.y = 1.8;
+  const crownCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.7, 0), crownCoreMat);
+  crownCore.scale.y = 2.0;
   crownCore.userData = { ...NO_PICK };
   crownPivot.add(crown, crownCore);
   body.add(crownPivot);
   paints.push((v) => {
     crownShellMat.color.set(v.color);
     crownShellMat.emissive.set(v.emissive);
-    crownShellMat.emissiveIntensity = v.emissiveIntensity * 0.55;
-    hdr(crownCoreMat.color, v.emissive, 0.7 + v.emissiveIntensity * 1.2);
+    crownShellMat.emissiveIntensity = v.emissiveIntensity * 0.5;
+    hdr(crownCoreMat.color, v.emissive, 0.65 + v.emissiveIntensity * 1.1);
   });
 
-  // Skyward beam of light — thinner, more dramatic.
+  // Skyward beam
   const beamMat = new THREE.ShaderMaterial({
     vertexShader: BEAM_VERTEX,
     fragmentShader: BEAM_FRAGMENT,
@@ -347,30 +724,31 @@ const crystalCitadel: ArchetypeFactory = (entity) => {
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
   });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 0.4, 100, 32, 1, true), beamMat);
-  beam.position.y = 24.4 + 50;
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 0.5, 110, 32, 1, true), beamMat);
+  beam.position.y = crownHeight + 55;
   beam.userData = { ...NO_PICK };
   body.add(beam);
   paints.push((v) => {
     (beamMat.uniforms.uColor!.value as THREE.Color).set(v.emissive);
-    beamMat.uniforms.uStrength!.value = 0.04 + v.emissiveIntensity * 0.04;
+    beamMat.uniforms.uStrength!.value = 0.035 + v.emissiveIntensity * 0.035;
   });
 
-  // Internal light that makes the citadel illuminate its island — warm glow.
-  const glow = new THREE.PointLight('#ffb36b', 140, 52, 2);
-  glow.position.y = 10;
+  // Internal warm glow light
+  const glow = new THREE.PointLight('#ffb36b', 160, 60, 2);
+  glow.position.y = spireBase + 12;
   body.add(glow);
   paints.push((v) => {
     glow.color.set(v.emissive);
-    glow.intensity = 55 * v.emissiveIntensity;
+    glow.intensity = 65 * v.emissiveIntensity;
   });
 
   return make(body, paints, {
     tick: (t) => {
-      crownPivot.rotation.y = t * 0.38;
-      crownPivot.position.y = 24.4 + Math.sin(t * 0.85) * 0.5;
+      crownPivot.rotation.y = t * 0.35;
+      crownPivot.position.y = crownHeight + Math.sin(t * 0.8) * 0.55;
       beamMat.uniforms.uTime!.value = t;
     },
+    lightAnchor: body,
   });
 };
 
@@ -504,7 +882,8 @@ export const ARCHETYPES: Readonly<Record<string, ArchetypeFactory>> = {
   floatingIsland,
   crystalSpire,
   crystalCluster,
-  crystalCitadel,
+  crystalCitadel: castle,
+  castle,
   arcaneRing,
   lightOrb,
   obelisk,
