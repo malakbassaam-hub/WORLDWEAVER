@@ -59,17 +59,18 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | IN PROGRESS (superseded path; see 2026-11-21 audit) |
 | WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN (D-WM-4 only) |
 | WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | DONE (integration line) |
-| WW-033 | Renderer dispose does not release the WebGL context immediately | Medium | Kilo Code | 2026-11-23 | OPEN |
+| WW-033 | Renderer dispose does not release the WebGL context immediately | Medium | Kilo Code (probe); Kiro (studio context, mitigated) | 2026-11-23 | IN PROGRESS (studio context fixed; probe contexts open) |
 | WW-034 | Kilo's in-progress camera work edits Kiro-owned UI files | Low | Kilo Code / Kiro | 2026-11-22 | OPEN |
 | WW-035 | Kilo's camera work is uncommitted and unpushed | Medium | Kilo Code | 2026-11-21 | OPEN |
 | WW-036 | Full browser suite not run on the integrated tree | High | Kiro | 2026-11-22 | OPEN |
-| WW-037 | Session-reboot fallback path is untested | Low | Kiro | 2026-11-24 | OPEN |
-| WW-038 | Persistence panel not checked at narrow widths | Low | Kiro | 2026-11-24 | OPEN |
+| WW-037 | Session-reboot fallback path is untested | Low | Kiro | 2026-11-24 | DONE |
+| WW-038 | Persistence panel not checked at narrow widths | Low | Kiro | 2026-11-24 | DONE |
 | WW-039 | Agent terminal intermittently corrupts commands | Low | Malak (tooling) | 2026-11-22 | OPEN |
+| WW-040 | Restore and Import discarded open futures without asking | Medium | Kiro | 2026-11-21 | DONE |
 
-**Totals:** 39 issues. Critical 1, High 8, Medium 17, Low 13. OPEN 17, BLOCKED 11, IN PROGRESS 4, DONE 7.
+**Totals:** 40 issues. Critical 1, High 8, Medium 18, Low 13. OPEN 14, BLOCKED 11, IN PROGRESS 5, DONE 10.
 
-IDs WW-033 to WW-039 were allocated by Kiro on 2026-11-21. Before this, no branch, remote ref or worktree file used them (`git grep` across all refs; file search across all `WORLDWEAVER*` worktrees). New issues from any agent start at WW-040.
+IDs WW-033 to WW-040 were allocated by Kiro on 2026-11-21. Before this, no branch, remote ref or worktree file used WW-033 to WW-039 (`git grep` across all refs; file search across all `WORLDWEAVER*` worktrees). New issues from any agent start at WW-041.
 
 ---
 
@@ -967,6 +968,53 @@ Status words in this section: **PASS** (acceptance met, evidence below), **FAIL*
 
 **Acceptance criteria.** Cause identified, or a full session without the corruption.
 
+## 2026-11-21 risk closure (Kiro, later the same day)
+
+Run with no other agent's Playwright process active (checked port 5199 and `node` processes before each run). SwiftShader, recorded mode.
+
+| Command | Result |
+|---|---|
+| `npx vitest run` | 37 files, 454 passed, 0 failed (443 before plus 11 new: `reboot.test.ts` 7, `confirmation.test.ts` 4) |
+| `npm run typecheck` | exit 0 |
+| `npm run build` | exit 0; JS 797.71 kB (211.36 kB gzip); bundle has no `x-goog-api-key`, `generativelanguage` or `AIza…` |
+| `npx playwright test tests/e2e/persistence-risk.spec.ts`, first run (before the WW-033 fix) | 5 passed, 1 failed: 12 WebGL contexts still live after 20 reboots |
+| `npx playwright test tests/e2e/persistence-risk.spec.ts tests/e2e/persistence-lifecycle.spec.ts tests/e2e/persistence.spec.ts` (after the fix) | **15 passed** (13.9 min) |
+
+**WW-033 — IN PROGRESS.** Measured with an init-script probe over 20 Save/Restore and Import reboots, each preceded by an edit:
+
+| Probe (after reboot 20) | Before fix | After fix |
+|---|---|---|
+| Canvases in the page | 1 | 1 |
+| WebGL contexts created | 42 (2 per boot) | 42 |
+| Contexts still live (not lost) | **12** | **1** |
+| Live studio-viewport contexts | not measured | 1 (at every sampled cycle) |
+| Live probe contexts (renderer capability check, `SceneRenderer.ts:56`) | not measured | 0–1, released only by garbage collection |
+| `keydown` / `beforeunload` window listeners | 1 / 2, unchanged | 1 / 2, unchanged |
+| Active `ResizeObserver`s | 1, unchanged | 1, unchanged |
+| JS heap (Chrome `performance.memory`) | 34.1–39 MB over cycles 1–20, 52.4 MB after final interactions | 35.1–50.7 MB over cycles 10–20, 36.5 MB after final interactions |
+| "Too many active WebGL contexts" warnings, console errors | none, none | none, none |
+
+Fix (Kiro, `src/main.ts`, no renderer file changed): session teardown calls `WEBGL_lose_context.loseContext()` on the disposed renderer's canvas after `renderer.dispose()`. Remaining for Kilo: the renderer's WebGL2 capability probe (`SceneRenderer.ts:56` on this branch; check `f9775f7`'s WebGL1/WebGL2 diagnostics too) creates a throwaway context per boot that is never released. Acceptance remains: 20 reboots with live probe contexts at most 1 without relying on garbage collection, and `dispose()` releasing the viewport context itself.
+
+**WW-037 — DONE.** `src/persistence/reboot.ts` (extracted from `main.ts`) is unit-tested (7 tests: success, deferral, rollback, double failure shows a plain message instead of a blank page, concurrent request refused, throwing teardown, failed first start). Browser test "rollback: a valid world that fails to start keeps the previous world": a valid import whose session boot throws once leaves the previous world with its unsaved edit, the notice "…Your previous world was kept.", one canvas, pins intact, stable listeners, and a later import still works. Defect fixed: before, a second failure caused an unhandled rejection and an empty page.
+
+**WW-038 — DONE.** Browser tests at 390×844, 860×800 and 1180×800: Save, Export (`*.worldweaver.world`), Import confirmation within the viewport width, Cancel clickable (not covered), Restore, and no horizontal overflow. All pass.
+
+### WW-040 — Restore and Import discarded open futures without asking
+
+| Field | Value |
+|---|---|
+| Severity | Medium (silent loss of user work) |
+| Owner | Kiro |
+| Target | 2026-11-21 |
+| Status | DONE (2026-11-21) |
+
+**Description.** Futures live outside the store. With futures open but no world edits, `confirmation()` saw no unsaved changes and no undo history, so Restore or Import replaced the session and discarded the futures without a prompt.
+
+**Fix.** `createPersistence` takes `openFutures()` (`src/main.ts` passes the futures manager's count). Confirmation is required while futures are open, and the message names them ("…discards 2 open futures…"). If the count cannot be read, the studio asks.
+
+**Evidence.** `src/persistence/confirmation.test.ts` (4 tests). Browser test "Parallel Futures after a restore": with 2 futures and an active preview, Restore asks and names 2 open futures; Cancel keeps both; confirming restores, shows "No futures yet", removes the preview bar, keeps one canvas; a new future can be created, previewed and stopped in the restored session; console clean.
+
 ---
 
 ## Change log
@@ -980,3 +1028,4 @@ Status words in this section: **PASS** (acceptance met, evidence below), **FAIL*
 | 2026-11-18 | Readiness: added WW-030 (integration risk; textual merge clean, semantic tests pending) and WW-031 (World Morph defaults). Evidence added to WW-001, WW-020 and WW-025; live-test runbook and World Morph plan written. No existing target dates changed. |
 | 2026-11-18 | Re-check after Kilo pushed `116e97f`: WW-030 trial merge now has 4 conflicts (dated update added; earlier "textually clean" finding kept for history). Added WW-032 (UTF-16 lines in the WebGL branch `.gitignore`). No existing target dates changed. |
 | 2026-11-21 | Integration-readiness audit on `feature/persistence-studio-1121`: WW-016 IN PROGRESS (passes on branch), WW-030 IN PROGRESS (superseded path), WW-032 DONE with evidence, WW-029 recurred. Added WW-033 to WW-039. No existing target dates changed. See `docs/integration/INTEGRATION_READINESS_2026-11-21.md`. |
+| 2026-11-21 | Risk closure: WW-037, WW-038 DONE with evidence; WW-033 IN PROGRESS (studio context released at teardown, renderer probe context open for Kilo); added WW-040 (DONE). No existing target dates changed. |

@@ -78,6 +78,11 @@ export interface PersistenceDeps {
    * store's current state at construction.
    */
   readonly baselineFingerprint?: string;
+  /**
+   * Number of open Parallel Futures. Futures live outside the store, so a
+   * world with no edits can still have work that a load would discard.
+   */
+  openFutures?(): number;
 }
 
 export interface PersistenceController {
@@ -209,6 +214,13 @@ export function createPersistence(deps: PersistenceDeps): PersistenceController 
     confirmation() {
       const s = status();
       if (s.dirty) return { required: true, reason: 'You have unsaved changes. Loading another world discards them, along with undo history and open futures.' };
+      let futures = 0;
+      try {
+        futures = Math.max(0, Math.floor(deps.openFutures?.() ?? 0));
+      } catch {
+        futures = 1; // unknown: ask rather than discard silently
+      }
+      if (futures > 0) return { required: true, reason: `Loading another world discards ${futures === 1 ? 'the open future' : `${futures} open futures`}, along with undo history and the history panel.` };
       if (s.canUndo) return { required: true, reason: 'Loading another world clears undo history, the history panel and open futures.' };
       return { required: false, reason: null };
     },

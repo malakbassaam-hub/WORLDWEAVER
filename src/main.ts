@@ -23,6 +23,7 @@ import type { World } from './core/types';
 import { createPersistence, startupWorld, type RestoreInfo } from './persistence/controller';
 import { browserStorage, LocalSaveSlots } from './persistence/localSave';
 import { PersistencePanel } from './ui/persistencePanel';
+import { createRebooter, FALLBACK_NOTICE } from './persistence/reboot';
 
 /** What a session starts from. `restored` is true for any world loaded from a save or file. */
 interface SessionStart {
@@ -123,6 +124,8 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
     slots,
     ...(start.baselineFingerprint ? { baselineFingerprint: start.baselineFingerprint } : {}),
     replaceWorld: (world, info) => requestReboot(world, info, store.getState()),
+    // `lf` is mounted later, with the renderer; read it lazily.
+    openFutures: () => lf?.manager.list().length ?? 0,
   });
   const persistencePanel = new PersistencePanel(persistence, { notify: (m, t) => shell.toast(m, t) });
   const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -293,7 +296,12 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
       director.dispose();
       unsubscribeStore();
       unsubscribeSelection();
+      const canvas = renderer?.domElement;
       renderer?.dispose();
+      // Restore and Import reboot the session; without this each old context
+      // lingers until garbage collection (WW-033). dispose() has already removed
+      // the renderer's context-loss listeners, so this triggers no UI.
+      releaseWebGLContext(canvas);
       host.replaceChildren();
     };
   } catch (error) {
@@ -315,48 +323,52 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
   }
 }
 
-const host = document.getElementById('app');
-if (!host) throw new Error('#app element missing');
+/** Frees a disposed renderer's WebGL context now instead of at garbage collection. Best effort. */
+function releaseWebGLContext(canvas: HTMLCanvasElement | undefined): void {
+  if (!canvas) return;
+  try {
+    // getContext returns the canvas's existing context (null for the other WebGL version).
+    const gl = (canvas.getContext('webgl2') ?? canvas.getContext('webgl')) as WebGLRenderingContext | null;
+    if (gl && !gl.isContextLost()) gl.getExtension('WEBGL_lose_context')?.loseContext();
+  } catch {
+    /* the context is released at garbage collection instead */
+  }
+}
 
-let teardown: (() => void) | null = null;
-let rebooting = false;
+const appElement = document.getElementById('app');
+if (!appElement) throw new Error('#app element missing');
+const host: HTMLElement = appElement;
 
 /**
- * Replaces the whole session with a validated world. Deferred out of the click
- * handler that asked for it. If the new session fails to start, the previous
- * world is booted again (its undo history is lost, its content is not).
+ * Restore and Import replace the whole session through `rebooter`
+ * (src/persistence/reboot.ts): deferred out of the click handler, falling back
+ * to the previous world if the new session fails to start.
  */
 function loadNotice(info: RestoreInfo): string {
   if (info.recoveredFrom) return `The latest local save was damaged (${info.recoveredFrom}). The backup was restored. Undo history, the ledger and futures start fresh.`;
   return `${info.source === 'import' ? 'World imported.' : 'Local save restored.'} Undo history, the ledger and futures start fresh.`;
 }
 
+const rebooter = createRebooter<SessionStart>({
+  launch: (session) => boot(host, session, requestReboot),
+  clearHost: () => host.replaceChildren(),
+  report: (error) => console.error(error),
+  showFatal: (message) => {
+    const p = document.createElement('p');
+    p.className = 'ww-fatal';
+    p.setAttribute('role', 'alert');
+    p.textContent = message;
+    host.replaceChildren(p);
+  },
+});
+
 function requestReboot(world: World, info: RestoreInfo, previous: World): void {
-  if (rebooting) throw new Error('A world load is already in progress.');
-  rebooting = true;
-  queueMicrotask(async () => {
-    try {
-      teardown?.();
-      teardown = null;
-      try {
-        teardown = await launch(host!, { world, restored: true, notice: loadNotice(info), baselineFingerprint: worldFingerprint(world) });
-      } catch (error) {
-        console.error(error);
-        host!.replaceChildren();
-        teardown = await launch(host!, { world: previous, restored: false, notice: 'The loaded world could not be started. Your previous world was kept.', baselineFingerprint: worldFingerprint(previous) });
-      }
-    } finally {
-      rebooting = false;
-    }
-  });
+  void rebooter.request(
+    { world, restored: true, notice: loadNotice(info), baselineFingerprint: worldFingerprint(world) },
+    { world: previous, restored: false, notice: FALLBACK_NOTICE, baselineFingerprint: worldFingerprint(previous) },
+  );
 }
 
-const launch = (target: HTMLElement, session: SessionStart) => boot(target, session, requestReboot);
-
 const initial = startupWorld(slots, buildCrystalKingdom);
-launch(host, { world: initial.world, restored: initial.from !== 'fresh', notice: initial.notice, ...(initial.baselineFingerprint ? { baselineFingerprint: initial.baselineFingerprint } : {}) }).then((t) => {
-  teardown = t;
-  if (import.meta.hot) {
-    import.meta.hot.dispose(() => teardown?.());
-  }
-});
+void rebooter.start({ world: initial.world, restored: initial.from !== 'fresh', notice: initial.notice, ...(initial.baselineFingerprint ? { baselineFingerprint: initial.baselineFingerprint } : {}) });
+if (import.meta.hot) import.meta.hot.dispose(() => rebooter.dispose());

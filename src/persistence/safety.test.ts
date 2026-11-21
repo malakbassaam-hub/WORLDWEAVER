@@ -23,7 +23,7 @@ const FORBIDDEN: ReadonlyArray<[string, RegExp]> = [
 
 describe('persistence safety', () => {
   it('scans the persistence modules and UI', () => {
-    expect(production.map(([p]) => p).sort()).toEqual(['../ui/persistenceModel.ts', '../ui/persistencePanel.ts', './controller.ts', './localSave.ts', './saveFile.ts']);
+    expect(production.map(([p]) => p).sort()).toEqual(['../ui/persistenceModel.ts', '../ui/persistencePanel.ts', './controller.ts', './localSave.ts', './reboot.ts', './saveFile.ts']);
   });
 
   it.each(FORBIDDEN)('contains no %s', (_label, pattern) => {

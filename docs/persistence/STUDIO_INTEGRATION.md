@@ -93,3 +93,11 @@ Not covered by a test: the reboot fallback when a new session throws; repeated r
 - After an Import: recorded Morph via the Director applies with the citadel preserved, Causal Ledger rows increase, one Undo returns to the restored state and the indicator reads "All changes saved".
 
 Renderer contract against Kilo's `f9775f7`: reviewed in code (see `docs/integration/INTEGRATION_READINESS_2026-11-21.md` section 3). Open point: WW-033 (context not force-released on dispose).
+
+### Risk closure (2026-11-21, evening)
+
+- Reboots are handled by `src/persistence/reboot.ts` (unit-tested). On a failed session start it rolls back to the previous world; if that also fails it shows a plain message instead of a blank page.
+- Session teardown in `src/main.ts` releases the disposed renderer's WebGL context (`WEBGL_lose_context`). 20 reboots: 1 live context at the end (12 before the fix). Kilo: the renderer's capability-probe context is still released only by garbage collection (WW-033).
+- Restore and Import ask for confirmation while Parallel Futures are open (WW-040).
+- Narrow widths 390, 860 and 1180 px verified (WW-038).
+- Browser evidence: `persistence-risk.spec.ts` (6), `persistence-lifecycle.spec.ts` (2), `persistence.spec.ts` (7): 15 passed. Details in `docs/ISSUE_REGISTER.md`, "2026-11-21 risk closure".
