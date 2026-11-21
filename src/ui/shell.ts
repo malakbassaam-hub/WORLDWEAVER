@@ -24,7 +24,9 @@ export class StudioShell {
   private toastTimer = 0;
 
   constructor(host: HTMLElement, world: { name: string; seed: number }, handlers: TopbarHandlers) {
-    this.viewport = h('div', { class: 'ww-viewport' });
+    this.viewport = h('div', { class: 'ww-viewport' }, [
+      h('p', { class: 'ww-viewport-hint', text: 'LMB: Orbit · RMB: Pan · Wheel: Zoom · Click: Select · Double-click: Focus · Home: Reset' }),
+    ]);
     this.stats = h('div', { class: 'ww-stats', attrs: { 'aria-live': 'off' } });
     this.tooltip = h('div', { class: 'ww-tooltip', attrs: { role: 'tooltip' } });
     this.toastHost = h('div', { class: 'ww-toast-host', attrs: { 'aria-live': 'polite' } });

@@ -19,6 +19,8 @@ interface MorphTween {
   readonly binding: Binding;
   readonly fromPos: THREE.Vector3;
   readonly toPos: THREE.Vector3;
+  readonly fromScale: THREE.Vector3;
+  readonly toScale: THREE.Vector3;
   readonly start: number;
   readonly duration: number;
 }
@@ -28,6 +30,8 @@ interface FutureTween {
   readonly binding: Binding;
   readonly fromPos: THREE.Vector3;
   readonly toPos: THREE.Vector3;
+  readonly fromScale: THREE.Vector3;
+  readonly toScale: THREE.Vector3;
   readonly start: number;
   readonly duration: number;
 }
@@ -48,15 +52,62 @@ export interface RenderStats {
 
 export class WebGLUnavailableError extends Error {
   override readonly name = 'WebGLUnavailableError';
+  readonly webgl1: boolean;
+  readonly webgl2: boolean;
+  readonly reason: string;
+
+  constructor(message: string, webgl1: boolean, webgl2: boolean, reason: string) {
+    super(message);
+    this.webgl1 = webgl1;
+    this.webgl2 = webgl2;
+    this.reason = reason;
+  }
+}
+
+/**
+ * Probes the canvas for WebGL support. Returns detailed availability info
+ * so the caller can decide whether to fall back to WebGL1 or show a helpful
+ * error. Never throws.
+ */
+export interface WebGLProbe {
+  readonly webgl1: boolean;
+  readonly webgl2: boolean;
+  readonly reason: string;
+}
+
+export function probeWebGL(canvas?: HTMLCanvasElement): WebGLProbe {
+  const c = canvas ?? document.createElement('canvas');
+  let gl2: WebGL2RenderingContext | null = null;
+  let gl1: WebGLRenderingContext | null = null;
+  let reason = 'unknown';
+
+  try {
+    gl2 = c.getContext('webgl2') as WebGL2RenderingContext | null;
+    if (gl2) {
+      return { webgl1: true, webgl2: true, reason: 'webgl2 available' };
+    }
+  } catch (e) {
+    reason = `webgl2 context creation threw: ${(e as Error).message}`;
+  }
+
+  try {
+    gl1 = c.getContext('webgl') as WebGLRenderingContext | null;
+    if (gl1) {
+      return { webgl1: true, webgl2: false, reason: 'webgl2 unavailable; webgl1 available' };
+    }
+  } catch (e) {
+    reason = `webgl1 context creation threw: ${(e as Error).message}`;
+  }
+
+  if (!gl2 && !gl1) {
+    reason = 'no WebGL context available (hardware acceleration may be disabled or GPU drivers outdated)';
+  }
+
+  return { webgl1: false, webgl2: false, reason };
 }
 
 export function isWebGLAvailable(): boolean {
-  try {
-    const canvas = document.createElement('canvas');
-    return canvas.getContext('webgl2') !== null;
-  } catch {
-    return false;
-  }
+  return probeWebGL().webgl2;
 }
 
 interface Binding {
@@ -75,9 +126,9 @@ interface CameraTween {
   readonly duration: number;
 }
 
-const HOME_TARGET = new THREE.Vector3(0, 9, 0);
-const HOME_POSITION = new THREE.Vector3(46, 19, 52);
-const INTRO_POSITION = new THREE.Vector3(118, 52, 132);
+const HOME_TARGET = new THREE.Vector3(0, 10, 0);
+const HOME_POSITION = new THREE.Vector3(52, 22, 58);
+const INTRO_POSITION = new THREE.Vector3(120, 55, 135);
 const CLICK_TOLERANCE_PX = 5;
 
 const easeInOutCubic = (k: number) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
@@ -111,6 +162,7 @@ export class SceneRenderer {
   private fps = 60;
   private disposed = false;
   private contextLost = false;
+  private webglVersion: number;
   /** Last committed world snapshot, used to rebuild the scene after context restore. */
   private lastWorld: World | null = null;
   /** Canvas element owned by the renderer; exposed so the shell can re-attach it after a fallback. */
@@ -134,20 +186,57 @@ export class SceneRenderer {
     private readonly callbacks: RendererCallbacks,
     private readonly seed: number,
   ) {
-    if (!isWebGLAvailable()) {
-      throw new WebGLUnavailableError('WebGL 2 is not available in this browser or has been disabled.');
+    const probe = probeWebGL();
+    let webglVersion = 2;
+    if (!probe.webgl2) {
+      if (probe.webgl1) {
+        webglVersion = 1;
+        console.warn('WebGL2 unavailable; falling back to WebGL1:', probe.reason);
+      } else {
+        throw new WebGLUnavailableError(
+          `WebGL is not available in this browser: ${probe.reason}`,
+          probe.webgl1,
+          probe.webgl2,
+          probe.reason,
+        );
+      }
     }
+
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance', stencil: false });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: 'high-performance',
+        stencil: false,
+      });
     } catch (error) {
-      throw new WebGLUnavailableError(`Could not create a WebGL context: ${(error as Error).message}`);
+      if (webglVersion === 1) {
+        // WebGL1 fallback: try once more with a minimal context.
+        try {
+          renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'default', stencil: false });
+        } catch (e2) {
+          throw new WebGLUnavailableError(
+            `Could not create a WebGL context: ${(e2 as Error).message}`,
+            probe.webgl1,
+            probe.webgl2,
+            probe.reason,
+          );
+        }
+      } else {
+        throw new WebGLUnavailableError(
+          `Could not create a WebGL context: ${(error as Error).message}`,
+          probe.webgl1,
+          probe.webgl2,
+          probe.reason,
+        );
+      }
     }
     this.renderer = renderer;
+    this.webglVersion = webglVersion;
     this.domElement = renderer.domElement;
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
+    renderer.toneMappingExposure = 1.05;
     renderer.shadowMap.enabled = true;
     // PCFSoftShadowMap was removed in three r0.18x; PCF is the supported soft-edged option.
     renderer.shadowMap.type = THREE.PCFShadowMap;
@@ -156,7 +245,7 @@ export class SceneRenderer {
     renderer.domElement.setAttribute('aria-label', 'WORLDWEAVER 3D viewport');
     container.appendChild(renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(40, 1, 0.5, 1400);
+    this.camera = new THREE.PerspectiveCamera(42, 1, 0.5, 1400);
     this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), FOG_DENSITY);
     this.scene.background = FOG_COLOR.clone();
 
@@ -169,10 +258,11 @@ export class SceneRenderer {
 
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.07;
-    this.controls.minDistance = 8;
-    this.controls.maxDistance = 190;
-    this.controls.maxPolarAngle = Math.PI * 0.56;
+    this.controls.dampingFactor = 0.08;
+    this.controls.minDistance = 6;
+    this.controls.maxDistance = 220;
+    this.controls.minPolarAngle = 0.05;
+    this.controls.maxPolarAngle = Math.PI * 0.52;
     this.controls.screenSpacePanning = true;
     this.controls.target.copy(HOME_TARGET);
     this.controls.addEventListener('start', this.cancelTween);
@@ -187,6 +277,7 @@ export class SceneRenderer {
     canvas.addEventListener('pointerup', this.onPointerUp);
     canvas.addEventListener('pointermove', this.onPointerMove);
     canvas.addEventListener('pointerleave', this.onPointerLeave);
+    canvas.addEventListener('dblclick', this.onDoubleClick);
     canvas.addEventListener('webglcontextlost', this.onContextLost);
     canvas.addEventListener('webglcontextrestored', this.onContextRestored);
 
@@ -278,6 +369,10 @@ export class SceneRenderer {
     return this.quality;
   }
 
+  getWebGLVersion(): number {
+    return this.webglVersion;
+  }
+
   getStats(): RenderStats {
     return {
       fps: Math.round(this.fps),
@@ -299,6 +394,7 @@ export class SceneRenderer {
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerleave', this.onPointerLeave);
+    canvas.removeEventListener('dblclick', this.onDoubleClick);
     canvas.removeEventListener('webglcontextlost', this.onContextLost);
     canvas.removeEventListener('webglcontextrestored', this.onContextRestored);
     this.controls.removeEventListener('start', this.cancelTween);
@@ -467,6 +563,17 @@ export class SceneRenderer {
     this.setHover(null, 0, 0);
   };
 
+  private onDoubleClick = (event: MouseEvent) => {
+    const id = this.pick(event.clientX, event.clientY);
+    if (id) {
+      this.callbacks.onSelect?.(id);
+      this.focus(id);
+    } else {
+      this.callbacks.onSelect?.(null);
+      this.resetCamera();
+    }
+  };
+
   private setHover(id: EntityId | null, x: number, y: number) {
     if (id !== this.hoveredId) {
       this.hoveredId = id;
@@ -549,8 +656,8 @@ export class SceneRenderer {
     });
     const composer = new EffectComposer(this.renderer, target);
     composer.addPass(new RenderPass(this.scene, this.camera));
-    // Threshold sits above the sky's brightest values so only emissive elements bloom.
-    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.8, 0.55, 0.9));
+    // Controlled bloom: lower strength, tighter radius, higher threshold to avoid sky washout.
+    composer.addPass(new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.55, 0.4, 0.92));
     composer.addPass(new OutputPass());
     return composer;
   }
@@ -662,12 +769,16 @@ export class SceneRenderer {
       if (!beforeEntity || !afterEntity) continue;
       const fromPos = new THREE.Vector3(...beforeEntity.components.transform.position);
       const toPos = new THREE.Vector3(...afterEntity.components.transform.position);
-      if (fromPos.equals(toPos)) continue;
+      const fromScale = new THREE.Vector3(...beforeEntity.components.transform.scale);
+      const toScale = new THREE.Vector3(...afterEntity.components.transform.scale);
+      if (fromPos.equals(toPos) && fromScale.equals(toScale)) continue;
       this.morphTweens.set(id, {
         id,
         binding,
         fromPos,
         toPos,
+        fromScale,
+        toScale,
         start: start / 1000,
         duration,
       });
@@ -694,6 +805,7 @@ export class SceneRenderer {
 
         for (const tween of this.morphTweens.values()) {
           tween.binding.root.position.lerpVectors(tween.fromPos, tween.toPos, ease);
+          tween.binding.root.scale.lerpVectors(tween.fromScale, tween.toScale, ease);
         }
 
         if (k >= 1) {
@@ -754,12 +866,16 @@ export class SceneRenderer {
       if (!beforeEntity || !afterEntity) continue;
       const fromPos = new THREE.Vector3(...beforeEntity.components.transform.position);
       const toPos = new THREE.Vector3(...afterEntity.components.transform.position);
-      if (fromPos.equals(toPos)) continue;
+      const fromScale = new THREE.Vector3(...beforeEntity.components.transform.scale);
+      const toScale = new THREE.Vector3(...afterEntity.components.transform.scale);
+      if (fromPos.equals(toPos) && fromScale.equals(toScale)) continue;
       this.futureTweens.set(id, {
         id,
         binding,
         fromPos,
         toPos,
+        fromScale,
+        toScale,
         start: start / 1000,
         duration,
       });
@@ -786,6 +902,7 @@ export class SceneRenderer {
 
         for (const tween of this.futureTweens.values()) {
           tween.binding.root.position.lerpVectors(tween.fromPos, tween.toPos, ease);
+          tween.binding.root.scale.lerpVectors(tween.fromScale, tween.toScale, ease);
         }
 
         if (k >= 1) {

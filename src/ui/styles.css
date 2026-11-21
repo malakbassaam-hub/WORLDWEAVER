@@ -330,6 +330,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .ww-stats { position: absolute; top: 4px; right: 4px; font-family: var(--mono); font-size: 10.5px; color: var(--muted); padding: 4px 8px; border-radius: 8px; background: rgba(4, 5, 11, 0.45); }
 .ww-controls-hint { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); margin: 0; font-size: 11px; color: rgba(200, 206, 240, 0.6); white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); }
+.ww-viewport-hint { position: absolute; bottom: 4px; left: 4px; margin: 0; font-size: 10px; color: rgba(200, 206, 240, 0.5); white-space: nowrap; text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8); pointer-events: none; }
 
 .ww-tooltip { position: fixed; top: 0; left: 0; z-index: 30; pointer-events: none; padding: 5px 10px; border-radius: 8px; font-size: 12px; background: rgba(8, 9, 22, 0.88); border: 1px solid var(--glass-edge-hi); color: var(--ink); box-shadow: 0 0 18px rgba(64, 224, 255, 0.2); opacity: 0; transition: opacity 0.12s; white-space: nowrap; }
 .ww-tooltip.is-visible { opacity: 1; }
@@ -372,6 +373,7 @@ button, input, textarea { font: inherit; color: inherit; }
   .ww-timeline { flex-direction: column; }
   .ww-director { max-height: none; }
   .ww-controls-hint { display: none; }
+  .ww-viewport-hint { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
