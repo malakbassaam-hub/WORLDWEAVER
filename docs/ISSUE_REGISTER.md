@@ -1019,6 +1019,25 @@ Kilo's pushed `feature/camera-cinematic-1121` (`39811af`, read from git objects 
 
 **Evidence.** `src/persistence/confirmation.test.ts` (4 tests). Browser test "Parallel Futures after a restore": with 2 futures and an active preview, Restore asks and names 2 open futures; Cancel keeps both; confirming restores, shows "No futures yet", removes the preview bar, keeps one canvas; a new future can be created, previewed and stopped in the restored session; console clean.
 
+## 2026-11-21 integration (Kiro, branch `integration/1121`)
+
+`integration/1121` = `feature/persistence-studio-1121` (`3a5dfdb`) + `--no-ff` merge of `feature/camera-cinematic-1121` (`39811af`, which contains `f9775f7`). Merge commit `0085b41`; no conflicts (`git merge-tree` exit 0 before merging). `package.json` and the lockfile are unchanged from `96a1422`. SwiftShader, recorded mode; every browser run started only after Kilo's Playwright processes had exited and port 5199 was free.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (exit 0) |
+| Unit tests | `npx vitest run` | PASS: 37 files, 454/454 |
+| Build | `npm run build` | PASS: JS 806.50 kB (213.84 kB gzip); bundle has no `x-goog-api-key`, `generativelanguage` or `AIza…` |
+| Camera | `npx playwright test tests/e2e/camera.spec.ts` (new) | PASS: 2/2 (6.1 min) |
+| Studio browser suite | `npx playwright test` on director, webgl-recovery, performance, persistence, persistence-lifecycle and persistence-risk specs | PASS: 58/58 (25.9 min) |
+| Ledger/Futures demo suite | `npx playwright test -c playwright.ui.config.ts` | NOT RUN: agent terminal stopped executing commands (WW-039) |
+
+Camera evidence (mean RGB difference against an idle-animation baseline of 0.62; threshold 1.87): orbit 18.6, pan 13.5, zoom 11.2, Home vs zoomed view 22.4, Home vs start view 2.6, double-click focus 19.9 (selects Aurelion Citadel), F framing 37.7. A drag selects nothing. After a Restore reboot: idle 1.29, orbit 19.41.
+
+WW-033 on the cinematic renderer (20 Save/Restore and Import reboots): 1 canvas throughout; 42 contexts created; **1 live context at the end** (studio viewport 1, probe 0); probe contexts were live briefly at cycles 1 and 5 (1 each) and later collected; no "Too many active WebGL contexts" warnings; `keydown` 1, `beforeunload` 2 and `ResizeObserver` 1 unchanged; heap 31.1 MB at start, 40.8 MB at end. Kilo's probe still relies on garbage collection, so WW-033 stays IN PROGRESS for Kilo.
+
+WW-036: PASS for the studio suite on `0085b41`; the Ledger/Futures demo suite is still to run. Status stays OPEN until it passes.
+
 ---
 
 ## Change log
