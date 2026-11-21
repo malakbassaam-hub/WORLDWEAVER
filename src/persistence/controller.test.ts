@@ -143,11 +143,11 @@ describe('export', () => {
     const s = studio();
     const a = s.persistence.exportFile();
     if (!a.ok) throw new Error('export');
-    expect(a.file).toMatchObject({ filename: 'worldweaver-crystal-kingdom-at-dusk-20261120100000.json', mime: 'application/json' });
+    expect(a.file).toMatchObject({ filename: 'worldweaver-crystal-kingdom-at-dusk-20261120100000.worldweaver.world', mime: 'application/json' });
     const parsed = parseSaveFile(a.file.text);
     expect(parsed.ok && canonical(parsed.world) === canonical(s.store.getState())).toBe(true);
-    expect(exportFilename('../../etc/passwd <script>', null)).toBe('worldweaver-etc-passwd-script-unsaved.json');
-    expect(exportFilename('دار', null)).toBe('worldweaver-world-unsaved.json');
+    expect(exportFilename('../../etc/passwd <script>', null)).toBe('worldweaver-etc-passwd-script-unsaved.worldweaver.world');
+    expect(exportFilename('دار', null)).toBe('worldweaver-world-unsaved.worldweaver.world');
   });
 });
 

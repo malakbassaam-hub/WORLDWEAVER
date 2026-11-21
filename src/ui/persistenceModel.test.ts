@@ -31,9 +31,11 @@ describe('persistence view', () => {
   it('refuses oversized, empty or non-JSON files before reading them', () => {
     expect(precheckFile({ size: 3 * 1024 * 1024, name: 'w.json' })).toMatch(/larger than 2 MB/);
     expect(precheckFile({ size: 0, name: 'w.json' })).toBe('The file is empty.');
-    expect(precheckFile({ size: 10, name: 'w.exe' })).toMatch(/\.json world file/);
+    expect(precheckFile({ size: 10, name: 'w.exe' })).toMatch(/\.worldweaver\.world file/);
     expect(precheckFile({ size: 10, name: 'world', type: 'application/json' })).toBeNull();
     expect(precheckFile({ size: 10, name: 'W.JSON' })).toBeNull();
+    expect(precheckFile({ size: 10, name: 'kingdom.worldweaver.world' })).toBeNull();
+    expect(precheckFile({ size: 10, name: 'KINGDOM.WORLDWEAVER.WORLD' })).toBeNull();
   });
 
   it('builds the import confirmation from the real check', () => {

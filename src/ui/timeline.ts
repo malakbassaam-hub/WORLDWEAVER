@@ -17,7 +17,7 @@ export class TimelinePanel {
 
   constructor(
     private readonly actions: StudioActions,
-    private readonly genesis: { readonly seq: number; readonly entities: number; readonly seed: number },
+    private readonly genesis: { readonly seq: number; readonly entities: number; readonly seed: number; readonly restored?: boolean },
   ) {
     this.undoBtn = h('button', { class: 'ww-btn', title: 'Undo (Ctrl+Z)', attrs: { type: 'button' }, on: { click: () => actions.undo() } }, [icon('undo'), h('span', { text: 'Undo' })]);
     this.redoBtn = h('button', { class: 'ww-btn', title: 'Redo (Ctrl+Shift+Z)', attrs: { type: 'button' }, on: { click: () => actions.redo() } }, [icon('redo'), h('span', { text: 'Redo' })]);
@@ -47,9 +47,9 @@ export class TimelinePanel {
 
     clear(this.rail);
     this.rail.append(
-      h('li', { class: 'ww-event is-genesis', title: `Deterministic genesis from seed ${this.genesis.seed}` }, [
+      h('li', { class: 'ww-event is-genesis', title: this.genesis.restored ? 'Baseline: a world restored from a save. Earlier history was not kept.' : `Deterministic genesis from seed ${this.genesis.seed}` }, [
         h('span', { class: 'ww-event-index', text: `#${this.genesis.seq}` }),
-        h('span', { class: 'ww-event-text', text: `Genesis · ${this.genesis.entities} entities` }),
+        h('span', { class: 'ww-event-text', text: `${this.genesis.restored ? 'Restored baseline' : 'Genesis'} · ${this.genesis.entities} entities` }),
         h('span', { class: 'ww-source is-system', text: SOURCE_LABEL.system }),
       ]),
     );

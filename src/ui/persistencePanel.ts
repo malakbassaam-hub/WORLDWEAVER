@@ -1,14 +1,17 @@
 /**
  * World persistence controls (DOM): Save, Restore, Export, Import, with an
  * unsaved-change indicator and inline confirmation. Text via textContent only.
- * Not yet mounted in the studio and NOT browser-tested yet (see
- * docs/persistence/INTEGRATION.md); its logic lives in persistenceModel.ts and
- * src/persistence/controller.ts, which are unit-tested.
+ * Mounted by src/main.ts. Its logic lives in persistenceModel.ts and
+ * src/persistence/controller.ts (unit-tested); browser coverage is in
+ * tests/e2e/persistence.spec.ts.
  */
 import type { ImportCheck, PersistenceController } from '../persistence/controller';
 import { MAX_IMPORT_BYTES } from '../persistence/controller';
 import { h } from './dom';
 import { importPrompt, persistenceView, precheckFile } from './persistenceModel';
+
+/** v1 restore policy, shown permanently so nobody is surprised after a reload. */
+export const HISTORY_NOTE = 'Saves keep the world only. Undo history, the Causal Ledger and Parallel Futures do not survive a reload or a load.';
 
 export interface PersistencePanelOptions {
   /** Called after a successful save, restore or import (e.g. a toast). */
@@ -40,12 +43,13 @@ export class PersistencePanel {
     this.restoreBtn = btn('Restore', () => this.askRestore());
     this.exportBtn = btn('Export', () => this.export());
     this.importBtn = btn('Import…', () => this.fileInput.click());
-    this.fileInput = h('input', { attrs: { type: 'file', accept: '.json,application/json', 'aria-label': 'Import a world file', hidden: '' } });
+    this.fileInput = h('input', { attrs: { type: 'file', accept: '.world,.json,application/json', 'aria-label': 'Import a world file', hidden: '' } });
     this.fileInput.addEventListener('change', () => void this.onFile());
     this.element = h('section', { class: 'ww-panel ww-glass ww-persistence', attrs: { 'aria-label': 'Save and load' } }, [
       h('div', { class: 'ww-panel-head' }, [h('h2', { text: 'World file' }), this.indicator]),
       h('div', { class: 'ww-btn-row' }, [this.saveBtn, this.restoreBtn, this.exportBtn, this.importBtn, this.fileInput]),
       this.slotLine,
+      h('p', { class: 'ww-note', text: HISTORY_NOTE, attrs: { 'data-testid': 'persistence-history-note' } }),
       this.confirmBox,
       this.message,
     ]);

@@ -54,6 +54,7 @@ export function importPrompt(check: Extract<ImportCheck, { ok: true }>, confirma
 export function precheckFile(file: { readonly size: number; readonly name: string; readonly type?: string }): string | null {
   if (file.size > MAX_IMPORT_BYTES) return `The file is larger than ${MAX_IMPORT_BYTES / (1024 * 1024)} MB.`;
   if (file.size === 0) return 'The file is empty.';
-  if (!/\.json$/i.test(file.name) && file.type !== 'application/json') return 'Choose a .json world file exported from WORLDWEAVER.';
+  // `.world` covers `*.worldweaver.world`; `.json` is accepted for hand-edited or older exports.
+  if (!/\.(world|json)$/i.test(file.name) && file.type !== 'application/json') return 'Choose a .worldweaver.world file exported from WORLDWEAVER.';
   return null;
 }

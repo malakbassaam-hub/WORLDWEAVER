@@ -18,14 +18,36 @@ import { TimelinePanel } from './ui/timeline';
 import { mountLedgerFutures } from './ui/ledgerFutures';
 import { SceneRendererFuturePreviewPresenter } from './render/future-preview-presenter';
 import { buildCrystalKingdom } from './worlds/crystalKingdom';
+import { worldFingerprint } from './core/fingerprint';
+import type { World } from './core/types';
+import { createPersistence, startupWorld, type RestoreInfo } from './persistence/controller';
+import { browserStorage, LocalSaveSlots } from './persistence/localSave';
+import { PersistencePanel } from './ui/persistencePanel';
+
+/** What a session starts from. `restored` is true for any world loaded from a save or file. */
+interface SessionStart {
+  readonly world: World;
+  readonly restored: boolean;
+  readonly notice: string | null;
+  readonly baselineFingerprint?: string;
+}
+
+const slots = new LocalSaveSlots(browserStorage());
+/** Health is fetched once; a session reboot (Restore/Import) must not wait on the proxy again. */
+let healthOnce: ReturnType<typeof fetchHealth> | null = null;
 
 /**
  * Composition root. Data flow is one-directional:
  *   UI intent -> StudioActions.edit -> WorldStore.dispatch -> reducer
  *   WorldStore change -> renderer.sync + panel.update
+ *
+ * Restore and Import never dispatch into the live store. They validate a World
+ * and call `requestReboot`, which tears this session down and boots a new one
+ * whose store, ledger, futures and undo history start from that world
+ * (docs/persistence/PERSISTENCE.md, v1 restore policy).
  */
-async function boot(host: HTMLElement) {
-  const genesis = buildCrystalKingdom();
+async function boot(host: HTMLElement, start: SessionStart, requestReboot: (world: World, info: RestoreInfo, previous: World) => void) {
+  const genesis = start.world;
   const store = new WorldStore(genesis);
   const selection = new SelectionModel();
   let renderer: SceneRenderer | null = null;
@@ -34,7 +56,8 @@ async function boot(host: HTMLElement) {
   // World Morph activation is server-side only. Never read import.meta.env in
   // client code (steering rule). The /api/director/health endpoint reports
   // morphEnabled from DIRECTOR_MORPH on the server process. Default off.
-  const health = await fetchHealth();
+  healthOnce ??= fetchHealth();
+  const health = await healthOnce;
   const MORPH_ENABLED = health?.morphEnabled === true;
 
   const shell = new StudioShell(host, genesis, {
@@ -91,7 +114,27 @@ async function boot(host: HTMLElement) {
 
   const hierarchy = new HierarchyPanel(actions);
   const inspector = new InspectorPanel(actions);
-  const timeline = new TimelinePanel(actions, { seq: genesis.seq, entities: genesis.order.length, seed: genesis.seed });
+  const timeline = new TimelinePanel(actions, { seq: genesis.seq, entities: genesis.order.length, seed: genesis.seed, restored: start.restored });
+
+  // World persistence (Save / Restore / Export / Import). Mounted before the
+  // renderer so it keeps working when WebGL is unavailable.
+  const persistence = createPersistence({
+    store,
+    slots,
+    ...(start.baselineFingerprint ? { baselineFingerprint: start.baselineFingerprint } : {}),
+    replaceWorld: (world, info) => requestReboot(world, info, store.getState()),
+  });
+  const persistencePanel = new PersistencePanel(persistence, { notify: (m, t) => shell.toast(m, t) });
+  const onBeforeUnload = (e: BeforeUnloadEvent) => {
+    if (persistence.status().dirty) e.preventDefault();
+  };
+  window.addEventListener('beforeunload', onBeforeUnload);
+  const disposePersistence = () => {
+    window.removeEventListener('beforeunload', onBeforeUnload);
+    persistencePanel.dispose();
+    persistence.dispose();
+  };
+  if (start.notice) shell.toast(start.notice);
 
   // AI World Director: talks only to the same-origin proxy at /api/director.
   const director = new DirectorController({
@@ -115,7 +158,7 @@ async function boot(host: HTMLElement) {
     },
   });
   void director.refreshHealth();
-  shell.left.append(hierarchy.element, directorPanel.element);
+  shell.left.append(hierarchy.element, directorPanel.element, persistencePanel.element);
   shell.right.append(inspector.element);
   shell.bottom.append(timeline.element);
 
@@ -235,6 +278,7 @@ async function boot(host: HTMLElement) {
     return () => {
       window.removeEventListener('keydown', onKey);
       window.clearInterval(statsTimer);
+      disposePersistence();
       lf?.dispose();
       directorPanel.dispose();
       director.dispose();
@@ -252,6 +296,7 @@ async function boot(host: HTMLElement) {
     // Still render without a renderer so panels work.
     render();
     return () => {
+      disposePersistence();
       lf?.dispose();
       directorPanel.dispose();
       director.dispose();
@@ -262,8 +307,46 @@ async function boot(host: HTMLElement) {
 
 const host = document.getElementById('app');
 if (!host) throw new Error('#app element missing');
-boot(host).then((teardown) => {
+
+let teardown: (() => void) | null = null;
+let rebooting = false;
+
+/**
+ * Replaces the whole session with a validated world. Deferred out of the click
+ * handler that asked for it. If the new session fails to start, the previous
+ * world is booted again (its undo history is lost, its content is not).
+ */
+function loadNotice(info: RestoreInfo): string {
+  if (info.recoveredFrom) return `The latest local save was damaged (${info.recoveredFrom}). The backup was restored. Undo history, the ledger and futures start fresh.`;
+  return `${info.source === 'import' ? 'World imported.' : 'Local save restored.'} Undo history, the ledger and futures start fresh.`;
+}
+
+function requestReboot(world: World, info: RestoreInfo, previous: World): void {
+  if (rebooting) throw new Error('A world load is already in progress.');
+  rebooting = true;
+  queueMicrotask(async () => {
+    try {
+      teardown?.();
+      teardown = null;
+      try {
+        teardown = await launch(host!, { world, restored: true, notice: loadNotice(info), baselineFingerprint: worldFingerprint(world) });
+      } catch (error) {
+        console.error(error);
+        host!.replaceChildren();
+        teardown = await launch(host!, { world: previous, restored: false, notice: 'The loaded world could not be started. Your previous world was kept.', baselineFingerprint: worldFingerprint(previous) });
+      }
+    } finally {
+      rebooting = false;
+    }
+  });
+}
+
+const launch = (target: HTMLElement, session: SessionStart) => boot(target, session, requestReboot);
+
+const initial = startupWorld(slots, buildCrystalKingdom);
+launch(host, { world: initial.world, restored: initial.from !== 'fresh', notice: initial.notice, ...(initial.baselineFingerprint ? { baselineFingerprint: initial.baselineFingerprint } : {}) }).then((t) => {
+  teardown = t;
   if (import.meta.hot) {
-    import.meta.hot.dispose(teardown);
+    import.meta.hot.dispose(() => teardown?.());
   }
 });

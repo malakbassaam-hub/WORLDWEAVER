@@ -97,10 +97,13 @@ export interface PersistenceController {
   dispose(): void;
 }
 
+/** Extension of exported world files. The content is JSON (see saveFile.ts). */
+export const EXPORT_EXTENSION = '.worldweaver.world';
+
 export function exportFilename(worldName: string, savedAt: string | null): string {
   const slug = worldName.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'world';
   const stamp = savedAt ? savedAt.replace(/[^0-9]/g, '').slice(0, 14) : 'unsaved';
-  return `worldweaver-${slug}-${stamp}.json`;
+  return `worldweaver-${slug}-${stamp}${EXPORT_EXTENSION}`;
 }
 
 export function createPersistence(deps: PersistenceDeps): PersistenceController {
