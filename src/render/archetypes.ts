@@ -39,11 +39,13 @@ function hdr(target: THREE.Color, hex: string, k: number): THREE.Color {
 // Crystal primitive
 // ---------------------------------------------------------------------------
 
-function crystalGeometry(radius: number, height: number, sides = 6): THREE.BufferGeometry {
+function crystalGeometry(radius: number, height: number, sides = 8): THREE.BufferGeometry {
   const profile = [
-    new THREE.Vector2(0, -height * 0.1),
+    new THREE.Vector2(0, -height * 0.08),
+    new THREE.Vector2(radius * 0.08, 0),
     new THREE.Vector2(radius, 0),
-    new THREE.Vector2(radius * 0.88, height * 0.7),
+    new THREE.Vector2(radius * 0.92, height * 0.55),
+    new THREE.Vector2(radius * 0.82, height * 0.72),
     new THREE.Vector2(0, height),
   ];
   return new THREE.LatheGeometry(profile, sides);
@@ -58,10 +60,10 @@ function crystal(radius: number, height: number, paints: Paint[], glowScale = 1)
   const group = new THREE.Group();
   const shellMat = new THREE.MeshStandardMaterial({
     flatShading: true,
-    roughness: 0.12,
-    metalness: 0.25,
+    roughness: 0.08,
+    metalness: 0.15,
     transparent: true,
-    opacity: 0.74,
+    opacity: 0.82,
     depthWrite: false,
   });
   const shell = new THREE.Mesh(crystalGeometry(radius, height), shellMat);
@@ -151,7 +153,7 @@ const floatingIsland: ArchetypeFactory = (entity) => {
   const paints: Paint[] = [];
   const body = new THREE.Group();
 
-  const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, metalness: 0.05, flatShading: true });
+  const rockMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.88, metalness: 0.08, flatShading: true });
   const rock = new THREE.Mesh(islandGeometry(seed), rockMat);
   rock.castShadow = true;
   rock.receiveShadow = true;
@@ -159,7 +161,7 @@ const floatingIsland: ArchetypeFactory = (entity) => {
   paints.push((v) => {
     rockMat.color.set(v.color);
     rockMat.emissive.set(v.emissive);
-    rockMat.emissiveIntensity = v.emissiveIntensity;
+    rockMat.emissiveIntensity = v.emissiveIntensity * 0.6;
   });
 
   // Scattered boulders on the top surface (instanced: one draw call).
@@ -256,20 +258,24 @@ const crystalCitadel: ArchetypeFactory = (entity) => {
   const paints: Paint[] = [];
   const body = new THREE.Group();
 
-  const stoneMat = new THREE.MeshStandardMaterial({ color: '#1c1934', roughness: 0.42, metalness: 0.55 });
+  // Deep stone base with warm-lit trim; cool shadow side for dusk contrast.
+  const stoneMat = new THREE.MeshStandardMaterial({ color: '#161228', roughness: 0.55, metalness: 0.35 });
   const trimMat = new THREE.LineBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
-  paints.push((v) => hdr(trimMat.color, v.emissive, 0.6 + v.emissiveIntensity * 0.9));
+  paints.push((v) => hdr(trimMat.color, v.emissive, 0.5 + v.emissiveIntensity * 0.8));
 
+  // Six stepped tiers, each smaller than the last, for a layered pyramidal silhouette.
   const tiers: Array<[number, number, number, number]> = [
-    // radiusTop, radiusBottom, height, y
-    [6.4, 7.2, 0.9, 0.2],
-    [4.9, 5.6, 0.8, 1.05],
-    [3.3, 3.9, 0.7, 1.8],
+    [7.4, 8.6, 1.1, 0.15],
+    [5.8, 6.6, 0.95, 1.2],
+    [4.4, 5.1, 0.85, 2.1],
+    [3.2, 3.8, 0.75, 2.8],
+    [2.2, 2.7, 0.65, 3.45],
+    [1.4, 1.8, 0.55, 4.0],
   ];
   for (const [rt, rb, h, y] of tiers) {
-    const geo = new THREE.CylinderGeometry(rt, rb, h, 6);
+    const geo = new THREE.CylinderGeometry(rt, rb, h, 10);
     const tier = new THREE.Mesh(geo, stoneMat);
-    tier.position.y = y + h / 2 - 0.2;
+    tier.position.y = y + h / 2 - 0.15;
     tier.castShadow = true;
     tier.receiveShadow = true;
     const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), trimMat);
@@ -278,51 +284,60 @@ const crystalCitadel: ArchetypeFactory = (entity) => {
     body.add(tier);
   }
 
-  // Lantern pillars on the lowest tier.
+  // Buttress-like corner pinnacles on the base tier.
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const pinnacle = crystal(0.35, 2.2, paints);
+    pinnacle.position.set(Math.cos(a) * 7.2, 1.35, Math.sin(a) * 7.2);
+    pinnacle.rotation.set(Math.sin(a) * 0.15, 0, -Math.cos(a) * 0.15);
+    body.add(pinnacle);
+  }
+
+  // Lantern pillars on the lowest tier with warm glows.
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
-    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.3, 2.6, 6), stoneMat);
-    pillar.position.set(Math.cos(a) * 6.0, 2.2, Math.sin(a) * 6.0);
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.34, 2.8, 8), stoneMat);
+    pillar.position.set(Math.cos(a) * 6.6, 2.4, Math.sin(a) * 6.6);
     pillar.castShadow = true;
     body.add(pillar);
-    const tip = crystal(0.24, 1.1, paints, 1.2);
-    tip.position.set(pillar.position.x, 3.5, pillar.position.z);
+    const tip = crystal(0.28, 1.3, paints, 1.3);
+    tip.position.set(pillar.position.x, 3.85, pillar.position.z);
     body.add(tip);
   }
 
-  // Central spire and four guardians.
-  const spireBase = 2.3;
-  const main = crystal(1.7, 17, paints, 1.15);
+  // Central spire with four guardian spires and a dramatic floating crown.
+  const spireBase = 2.6;
+  const main = crystal(1.9, 18.5, paints, 1.2);
   main.position.y = spireBase;
   body.add(main);
   for (let i = 0; i < 4; i++) {
     const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
-    const g = crystal(0.75, rng.range(7.5, 9.5), paints);
-    g.position.set(Math.cos(a) * 2.7, spireBase - 0.2, Math.sin(a) * 2.7);
-    g.rotation.set(Math.sin(a) * 0.16, 0, -Math.cos(a) * 0.16);
+    const g = crystal(0.85, rng.range(8.5, 10.5), paints);
+    g.position.set(Math.cos(a) * 3.0, spireBase - 0.3, Math.sin(a) * 3.0);
+    g.rotation.set(Math.sin(a) * 0.14, 0, -Math.cos(a) * 0.14);
     body.add(g);
   }
 
-  // Floating crown crystal above the spire.
+  // Floating crown crystal above the spire — slow bob and rotate.
   const crownPivot = new THREE.Group();
-  crownPivot.position.y = 22.6;
-  const crownShellMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.1, metalness: 0.3, transparent: true, opacity: 0.8, depthWrite: false });
-  const crown = new THREE.Mesh(new THREE.OctahedronGeometry(1.25, 0), crownShellMat);
-  crown.scale.y = 1.6;
+  crownPivot.position.y = 24.4;
+  const crownShellMat = new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.08, metalness: 0.4, transparent: true, opacity: 0.85, depthWrite: false });
+  const crown = new THREE.Mesh(new THREE.OctahedronGeometry(1.4, 0), crownShellMat);
+  crown.scale.y = 1.8;
   const crownCoreMat = new THREE.MeshBasicMaterial({ blending: THREE.AdditiveBlending, transparent: true, depthWrite: false });
-  const crownCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.55, 0), crownCoreMat);
-  crownCore.scale.y = 1.6;
+  const crownCore = new THREE.Mesh(new THREE.OctahedronGeometry(0.62, 0), crownCoreMat);
+  crownCore.scale.y = 1.8;
   crownCore.userData = { ...NO_PICK };
   crownPivot.add(crown, crownCore);
   body.add(crownPivot);
   paints.push((v) => {
     crownShellMat.color.set(v.color);
     crownShellMat.emissive.set(v.emissive);
-    crownShellMat.emissiveIntensity = v.emissiveIntensity * 0.5;
-    hdr(crownCoreMat.color, v.emissive, 0.6 + v.emissiveIntensity * 1.1);
+    crownShellMat.emissiveIntensity = v.emissiveIntensity * 0.55;
+    hdr(crownCoreMat.color, v.emissive, 0.7 + v.emissiveIntensity * 1.2);
   });
 
-  // Skyward beam of light.
+  // Skyward beam of light — thinner, more dramatic.
   const beamMat = new THREE.ShaderMaterial({
     vertexShader: BEAM_VERTEX,
     fragmentShader: BEAM_FRAGMENT,
@@ -332,28 +347,28 @@ const crystalCitadel: ArchetypeFactory = (entity) => {
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
   });
-  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 0.5, 90, 32, 1, true), beamMat);
-  beam.position.y = 22.6 + 45;
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 0.4, 100, 32, 1, true), beamMat);
+  beam.position.y = 24.4 + 50;
   beam.userData = { ...NO_PICK };
   body.add(beam);
   paints.push((v) => {
     (beamMat.uniforms.uColor!.value as THREE.Color).set(v.emissive);
-    beamMat.uniforms.uStrength!.value = 0.03 + v.emissiveIntensity * 0.03;
+    beamMat.uniforms.uStrength!.value = 0.04 + v.emissiveIntensity * 0.04;
   });
 
-  // Internal light that makes the citadel illuminate its island.
-  const glow = new THREE.PointLight('#40e0ff', 120, 46, 2);
-  glow.position.y = 9;
+  // Internal light that makes the citadel illuminate its island — warm glow.
+  const glow = new THREE.PointLight('#ffb36b', 140, 52, 2);
+  glow.position.y = 10;
   body.add(glow);
   paints.push((v) => {
     glow.color.set(v.emissive);
-    glow.intensity = 50 * v.emissiveIntensity;
+    glow.intensity = 55 * v.emissiveIntensity;
   });
 
   return make(body, paints, {
     tick: (t) => {
-      crownPivot.rotation.y = t * 0.45;
-      crownPivot.position.y = 22.6 + Math.sin(t * 0.9) * 0.45;
+      crownPivot.rotation.y = t * 0.38;
+      crownPivot.position.y = 24.4 + Math.sin(t * 0.85) * 0.5;
       beamMat.uniforms.uTime!.value = t;
     },
   });

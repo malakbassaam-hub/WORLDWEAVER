@@ -16,8 +16,8 @@ import {
  * and global lights. This is presentation, not world state; entities live in
  * the World and are built by archetypes.
  */
-export const FOG_COLOR = new THREE.Color('#24183f');
-export const FOG_DENSITY = 0.0042;
+export const FOG_COLOR = new THREE.Color('#1d1236');
+export const FOG_DENSITY = 0.0055;
 export const SEA_LEVEL = -17;
 
 export interface Environment {
@@ -145,11 +145,11 @@ export function createEnvironment(seed: number): Environment {
   track(motesMaterial);
 
   // --- Lights ------------------------------------------------------------
-  const hemi = new THREE.HemisphereLight('#6b5cff', '#0b1626', 0.75);
+  const hemi = new THREE.HemisphereLight('#4a5dff', '#080c26', 0.85);
   group.add(hemi);
 
-  const keyLight = new THREE.DirectionalLight('#ff9a6b', 2.2);
-  keyLight.position.copy(new THREE.Vector3(-0.66, 0.2, -0.75).normalize().multiplyScalar(140));
+  const keyLight = new THREE.DirectionalLight('#ffa855', 2.6);
+  keyLight.position.copy(new THREE.Vector3(-0.66, 0.3, -0.75).normalize().multiplyScalar(140));
   keyLight.target.position.set(0, 0, 0);
   keyLight.castShadow = true;
   keyLight.shadow.mapSize.set(2048, 2048);

@@ -157,6 +157,7 @@ async function boot(host: HTMLElement) {
       genesis.seed,
     );
     shell.setQualityLabel(renderer.getQuality());
+    shell.setStats(`WebGL ${renderer.getWebGLVersion()} · ${renderer.getQuality()} quality`);
 
     transitions = createTransitionCoordinator(
       { play: (t) => renderer!.playTransition(t), cancel: () => renderer!.cancelTransition() },
@@ -245,8 +246,15 @@ async function boot(host: HTMLElement) {
     };
   } catch (error) {
     renderer = null;
-    const message = error instanceof WebGLUnavailableError ? error.message : `The renderer failed to start: ${(error as Error).message}`;
-    shell.showFallback('3D viewport unavailable', message);
+    if (error instanceof WebGLUnavailableError) {
+      shell.showFallback(
+        '3D viewport unavailable',
+        `${error.message} WebGL1: ${error.webgl1 ? 'yes' : 'no'}, WebGL2: ${error.webgl2 ? 'yes' : 'no'}. Enable hardware acceleration, update GPU drivers, or try Chrome/Firefox/Edge. Panels still work.`,
+      );
+    } else {
+      const message = `The renderer failed to start: ${(error as Error).message}`;
+      shell.showFallback('3D viewport unavailable', message);
+    }
     shell.setQualityLabel('unavailable');
     console.error(error);
     // Still render without a renderer so panels work.
