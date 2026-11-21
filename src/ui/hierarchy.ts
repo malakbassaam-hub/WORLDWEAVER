@@ -26,7 +26,16 @@ export class HierarchyPanel {
     this.count = h('span', { class: 'ww-panel-meta' });
     this.list = h('div', { class: 'ww-tree', attrs: { role: 'tree', 'aria-label': 'Scene hierarchy' } });
     this.element = h('section', { class: 'ww-panel ww-glass ww-hierarchy' }, [
-      h('header', { class: 'ww-panel-head' }, [h('h2', { text: 'Scene' }), this.count]),
+      h('header', { class: 'ww-panel-head' }, [
+        h('h2', { text: 'Scene' }),
+        this.count,
+        h('button', {
+          class: 'ww-panel-collapse',
+          title: 'Collapse panel',
+          attrs: { type: 'button', 'aria-label': 'Collapse Scene panel' },
+          on: { click: () => this.actions.togglePanel?.('left') },
+        }, [icon('chevronLeft')]),
+      ]),
       h('label', { class: 'ww-search' }, [icon('search'), search]),
       this.list,
     ]);

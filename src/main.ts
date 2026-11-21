@@ -13,7 +13,7 @@ import { isTypingTarget } from './ui/dom';
 import { HierarchyPanel } from './ui/hierarchy';
 import { InspectorPanel } from './ui/inspector';
 import { SelectionModel } from './ui/selection';
-import { StudioShell } from './ui/shell';
+import { StudioShell, type ViewMode } from './ui/shell';
 import { TimelinePanel } from './ui/timeline';
 import { mountLedgerFutures } from './ui/ledgerFutures';
 import { SceneRendererFuturePreviewPresenter } from './render/future-preview-presenter';
@@ -47,6 +47,14 @@ async function boot(host: HTMLElement) {
       renderer.setQuality(next);
       shell.setQualityLabel(next);
     },
+    toggleMode: () => {
+      const nextMode: ViewMode = shell.getMode() === 'studio' ? 'immersive' : 'studio';
+      shell.setMode(nextMode);
+      if (nextMode === 'studio') {
+        actions.select(null); // Deselect on exit to immersive
+      }
+    },
+    showHelp: () => shell.showHelpPopover(),
   });
 
   const actions: StudioActions = {
@@ -86,6 +94,9 @@ async function boot(host: HTMLElement) {
     },
     notify(message, tone = 'info') {
       shell.toast(message, tone);
+    },
+    togglePanel(side) {
+      shell.togglePanel(side);
     },
   };
 
@@ -183,6 +194,7 @@ async function boot(host: HTMLElement) {
       },
       reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
       onError: (e) => console.error(e),
+      togglePanel: (side) => shell.togglePanel(side),
     });
     shell.bottom.append(lf.ledger.element);
     shell.right.append(lf.futures.element);
@@ -215,7 +227,11 @@ async function boot(host: HTMLElement) {
         event.preventDefault();
         actions.redo();
       } else if (!mod && key === 'escape') {
-        actions.select(null);
+        if (shell.getMode() === 'immersive') {
+          shell.setMode('studio');
+        } else {
+          actions.select(null);
+        }
       } else if (!mod && key === 'f') {
         const id = selection.get();
         if (id) actions.focus(id);

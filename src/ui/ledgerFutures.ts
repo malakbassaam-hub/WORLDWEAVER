@@ -37,6 +37,8 @@ export interface LedgerFuturesDeps {
   reducedMotion?(): boolean;
   /** Called with errors raised while updating the panels (never thrown to the store). */
   onError?(error: unknown): void;
+  /** Toggle panel collapse (left/right/bottom). */
+  togglePanel?: (side: 'left' | 'right' | 'bottom') => void;
 }
 
 export interface LedgerFuturesMount {
@@ -69,6 +71,7 @@ export function mountLedgerFutures(deps: LedgerFuturesDeps): LedgerFuturesMount 
     exists: (id) => Boolean(store.getState().entities[id]),
     ...(deps.focusEntity ? { focusEntity: deps.focusEntity } : {}),
     ...(deps.reducedMotion ? { reducedMotion: deps.reducedMotion } : {}),
+    ...(deps.togglePanel ? { togglePanel: (side) => deps.togglePanel!(side) } : {}),
   });
   recorder = createLedgerRecorder(initial, store);
   const manager = createFuturesManager(store, initial);
@@ -80,6 +83,7 @@ export function mountLedgerFutures(deps: LedgerFuturesDeps): LedgerFuturesMount 
     presenter: deps.presenter ?? null,
     ...(deps.notify ? { notify: deps.notify } : {}),
     ...(deps.focusEntity ? { focusEntity: deps.focusEntity } : {}),
+    ...(deps.togglePanel ? { togglePanel: (side) => deps.togglePanel!(side) } : {}),
   });
 
   const refreshLedger = () => {

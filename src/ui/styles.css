@@ -372,3 +372,198 @@ button, input, textarea { font: inherit; color: inherit; }
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   .ww-title-card { opacity: 1; }
 }
+
+/* ------------------------------------------------------------ dual-mode interface */
+
+/* Immersive mode: hide all panels, show only minimal floating controls */
+.ww-studio.is-immersive .ww-layout {
+  display: none;
+}
+.ww-studio.is-immersive .ww-immersive-controls {
+  display: flex !important;
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  gap: 8px;
+  padding: 8px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+.ww-studio.is-immersive .ww-immersive-controls .ww-btn {
+  height: 40px;
+  padding: 0 16px;
+  font-size: 13px;
+}
+.ww-studio.is-immersive .ww-immersive-controls .ww-icon-btn {
+  width: 40px;
+  height: 40px;
+}
+
+/* Collapsible panels in Studio mode */
+.ww-col.is-collapsed {
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  overflow: hidden;
+}
+.ww-col.is-collapsed .ww-panel-head h2 span,
+.ww-col.is-collapsed .ww-panel-meta,
+.ww-col.is-collapsed .ww-search,
+.ww-col.is-collapsed .ww-tree,
+.ww-col.is-collapsed .ww-director,
+.ww-col.is-collapsed .ww-inspector,
+.ww-col.is-collapsed .ww-timeline,
+.ww-col.is-collapsed .ww-hierarchy {
+  display: none !important;
+}
+.ww-col.is-collapsed .ww-panel-head {
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+.ww-col.is-collapsed .ww-panel-head button {
+  margin: 0;
+}
+
+/* Panel collapse toggle buttons */
+.ww-panel-collapse {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  cursor: pointer;
+  flex: none;
+  transition: transform 0.2s var(--ease), color 0.2s var(--ease);
+  border-radius: 6px;
+}
+.ww-panel-collapse:hover {
+  color: var(--cyan);
+  background: var(--cyan-soft);
+}
+.ww-col.is-collapsed .ww-panel-collapse {
+  transform: rotate(180deg);
+}
+
+/* Help popover */
+.ww-help-popover {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.ww-help-popover.is-visible {
+  display: flex;
+  animation: ww-help-popover-in 0.2s var(--ease);
+}
+@keyframes ww-help-popover-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ww-help-popover-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 5, 11, 0.85);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+.ww-help-popover-content {
+  position: relative;
+  width: min(420px, 90vw);
+  max-height: 80vh;
+  overflow-y: auto;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-edge);
+  border-radius: var(--radius);
+  padding: 20px;
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+.ww-help-popover-content h3 {
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.ww-help-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.ww-help-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.ww-help-list kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 90px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--glass-edge);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--cyan);
+  white-space: nowrap;
+}
+.ww-help-popover-content .ww-btn {
+  margin-top: 20px;
+  width: 100%;
+}
+
+/* Viewport hint removed in immersive mode */
+.ww-studio.is-immersive .ww-viewport-hint {
+  display: none;
+}
+
+/* Responsive adjustments for immersive mode */
+@media (max-width: 860px) {
+  .ww-studio.is-immersive .ww-immersive-controls {
+    top: auto;
+    bottom: 12px;
+    left: 12px;
+    right: 12px;
+    justify-content: space-between;
+  }
+  .ww-studio.is-immersive .ww-immersive-controls .ww-btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+/* KBD styling for general use */
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--glass-edge);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--cyan);
+}
