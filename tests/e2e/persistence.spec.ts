@@ -92,6 +92,8 @@ test.describe('World persistence', () => {
     await expect(row(page, 'Saved Spire')).toHaveCount(0);
 
     await button(page, 'Restore').click(); // fresh session: no confirmation needed
+    // The toast lasts 3.8 s, so check it first.
+    await expect(page.locator('.ww-toast-host')).toContainText('Undo history, the ledger and futures start fresh');
     await expect(row(page, 'Saved Spire').first()).toBeVisible();
     await expect(row(page, SPIRE)).toHaveCount(0);
     await expect(entityCount(page)).toHaveText(`${KINGDOM_ENTITIES} entities`);
@@ -103,7 +105,6 @@ test.describe('World persistence', () => {
     // Fresh baseline: no undo history, baseline row says restored, ledger restarted.
     await expect(undoBtn(page)).toBeDisabled();
     await expect(page.locator('.ww-rail .ww-event.is-genesis .ww-event-text')).toContainText('Restored baseline');
-    await expect(page.locator('.ww-toast-host')).toContainText('Undo history, the ledger and futures start fresh');
     expect(errors).toEqual([]);
   });
 
@@ -187,21 +188,35 @@ test.describe('World persistence', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a full browser store reports the quota error and keeps the world', async ({ page }) => {
+  test('a full browser store reports the quota error, keeps the world, and the previous save still restores', async ({ page }) => {
     const errors = await openStudio(page);
+    await button(page, 'Save').click(); // a good save of the default world
+    await expect(button(page, 'Restore')).toBeEnabled();
     await rename(page, SPIRE, 'Quota Spire');
-    await page.evaluate(() => {
-      const chunk = 'x'.repeat(256 * 1024);
-      try {
-        for (let i = 0; i < 400; i++) localStorage.setItem(`filler-${i}`, chunk);
-      } catch {
-        /* quota reached */
+    // Fill storage to the last character: halve the chunk until even 1 character does not fit.
+    const filled = await page.evaluate(() => {
+      let size = 1024 * 1024;
+      let i = 0;
+      while (size >= 1) {
+        try {
+          localStorage.setItem(`filler-${i++}`, 'x'.repeat(size));
+        } catch {
+          size = Math.floor(size / 2);
+        }
       }
+      return i;
     });
+    expect(filled).toBeGreaterThan(0);
     await button(page, 'Save').click();
     await expect(message(page)).not.toHaveText('');
-    await expect(indicator(page)).toHaveText('Unsaved changes');
-    await expect(row(page, 'Quota Spire').first()).toBeVisible();
+    await expect(indicator(page)).toHaveText('Unsaved changes'); // the save did not happen
+    await expect(row(page, 'Quota Spire').first()).toBeVisible(); // the world is unchanged
+
+    await button(page, 'Restore').click();
+    await expect(dialog(page)).toBeVisible();
+    await dialog(page).getByRole('button', { name: 'Restore', exact: true }).click();
+    await expect(row(page, SPIRE).first()).toBeVisible(); // the earlier good save
+    await expect(row(page, 'Quota Spire')).toHaveCount(0);
     expect(errors.filter((e) => !/QuotaExceeded|quota/i.test(e))).toEqual([]);
   });
 });

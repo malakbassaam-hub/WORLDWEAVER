@@ -134,7 +134,11 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
     persistencePanel.dispose();
     persistence.dispose();
   };
-  if (start.notice) shell.toast(start.notice);
+  // Shown once the studio is ready (below): renderer start-up can block the main
+  // thread for longer than a toast lasts on slow or software GPUs.
+  const showNotice = () => {
+    if (start.notice) shell.toast(start.notice);
+  };
 
   // AI World Director: talks only to the same-origin proxy at /api/director.
   const director = new DirectorController({
@@ -273,7 +277,12 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
       shell.setStats(`${s.fps} fps · ${s.drawCalls} draws · ${(s.triangles / 1000).toFixed(0)}k tris · ${s.entities} entities`);
     }, 500);
 
-    requestAnimationFrame(() => requestAnimationFrame(() => shell.ready()));
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        shell.ready();
+        showNotice();
+      }),
+    );
 
     return () => {
       window.removeEventListener('keydown', onKey);
@@ -295,6 +304,7 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
     console.error(error);
     // Still render without a renderer so panels work.
     render();
+    showNotice();
     return () => {
       disposePersistence();
       lf?.dispose();

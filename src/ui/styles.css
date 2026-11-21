@@ -66,7 +66,15 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .ww-layout > * { pointer-events: auto; min-height: 0; }
 .ww-topbar { grid-area: top; }
+/* The left column scrolls instead of spilling under the bottom row (Scene + Director + World file can exceed its height). */
 .ww-left { grid-area: left; }
+@media (min-width: 861px) {
+  .ww-left { overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--faint) transparent; }
+}
+.ww-persistence { flex: none; gap: 8px; }
+.ww-persistence .ww-btn-row { flex-wrap: wrap; }
+.ww-persistence [role="alertdialog"]:not([hidden]) { padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.ww-persistence p { margin: 0; }
 .ww-right { grid-area: right; }
 .ww-center { grid-area: center; pointer-events: none; position: relative; }
 .ww-bottom { grid-area: bottom; }
