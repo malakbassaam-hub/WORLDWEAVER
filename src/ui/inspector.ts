@@ -36,7 +36,16 @@ export class InspectorPanel {
     this.title = h('span', { class: 'ww-panel-meta' });
     this.body = h('div', { class: 'ww-inspector-body' });
     this.element = h('section', { class: 'ww-panel ww-glass ww-inspector', attrs: { 'aria-label': 'Inspector' } }, [
-      h('header', { class: 'ww-panel-head' }, [h('h2', { text: 'Inspector' }), this.title]),
+      h('header', { class: 'ww-panel-head' }, [
+        h('h2', { text: 'Inspector' }),
+        this.title,
+        h('button', {
+          class: 'ww-panel-collapse',
+          title: 'Collapse panel',
+          attrs: { type: 'button', 'aria-label': 'Collapse Inspector panel' },
+          on: { click: () => this.actions.togglePanel?.('right') },
+        }, [icon('chevronRight')]),
+      ]),
       this.body,
     ]);
     actions.selection.subscribe(() => this.render());

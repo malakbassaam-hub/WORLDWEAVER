@@ -13,7 +13,7 @@ import { isTypingTarget } from './ui/dom';
 import { HierarchyPanel } from './ui/hierarchy';
 import { InspectorPanel } from './ui/inspector';
 import { SelectionModel } from './ui/selection';
-import { StudioShell } from './ui/shell';
+import { StudioShell, type ViewMode } from './ui/shell';
 import { TimelinePanel } from './ui/timeline';
 import { mountLedgerFutures } from './ui/ledgerFutures';
 import { SceneRendererFuturePreviewPresenter } from './render/future-preview-presenter';
@@ -71,6 +71,15 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
       renderer.setQuality(next);
       shell.setQualityLabel(next);
     },
+    toggleMode: () => {
+      const nextMode: ViewMode = shell.getMode() === 'studio' ? 'immersive' : 'studio';
+      shell.setMode(nextMode);
+      if (nextMode === 'studio') {
+        actions.select(null); // Deselect on exit to immersive
+      }
+    },
+    showHelp: () => shell.showHelpPopover(),
+    toggleTools: () => shell.setToolsVisible(!shell.getToolsVisible()),
   });
 
   const actions: StudioActions = {
@@ -110,6 +119,15 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
     },
     notify(message, tone = 'info') {
       shell.toast(message, tone);
+    },
+    togglePanel(side) {
+      // Deprecated - kept for compatibility with ledger/futures
+      if (side === 'left' || side === 'right') {
+        const toolId = side === 'left' ? 'hierarchy' : 'inspector';
+        shell.setActiveTool(shell.getActiveTool() === toolId ? null : toolId);
+      } else if (side === 'bottom') {
+        shell.setDrawerOpen(!shell.isDrawerOpen());
+      }
     },
   };
 
@@ -165,9 +183,43 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
     },
   });
   void director.refreshHealth();
-  shell.left.append(hierarchy.element, directorPanel.element, persistencePanel.element);
-  shell.right.append(inspector.element);
-  shell.bottom.append(timeline.element);
+
+  // Register tools in the dock (order matters for display)
+  shell.registerTool({ id: 'hierarchy', label: 'Scene Hierarchy', iconName: 'hierarchy', element: hierarchy.element });
+  shell.registerTool({ id: 'director', label: 'AI World Director', iconName: 'director', element: directorPanel.element });
+  shell.registerTool({ id: 'inspector', label: 'Inspector', iconName: 'inspector', element: inspector.element });
+  shell.registerTool({ id: 'persistence', label: 'World File', iconName: 'ledger', element: persistencePanel.element });
+  shell.registerTool({ id: 'timeline', label: 'Timeline', iconName: 'timeline', element: timeline.element });
+
+  // Mount Causal Ledger and Parallel Futures panels (per docs/ledger-futures/UI_INTEGRATION.md).
+  // The presenter bridges Kiro's FuturePreviewPresenter contract to Kilo's
+  // SceneRenderer previewFuture/cancelFuture API.
+  lf = mountLedgerFutures({
+    store,
+    initial: genesis,
+    request: (body, signal) => requestProposal(body, { signal }),
+    morphEnabled: MORPH_ENABLED,
+    presenter: new SceneRendererFuturePreviewPresenter(renderer!),
+    notify: (message, tone) => shell.toast(message, tone),
+    focusEntity: (id) => {
+      actions.select(id);
+      actions.focus(id);
+    },
+    reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    onError: (e) => console.error(e),
+    togglePanel: (side) => {
+      if (side === 'bottom') shell.setDrawerOpen(!shell.isDrawerOpen());
+    },
+  });
+
+  // Register ledger and futures tools after mount
+  if (lf?.ledger?.element) shell.registerTool({ id: 'ledger', label: 'Causal Ledger', iconName: 'ledger', element: lf.ledger.element });
+  if (lf?.futures?.element) shell.registerTool({ id: 'futures', label: 'Parallel Futures', iconName: 'futures', element: lf.futures.element });
+
+  // Timeline and Ledger go in the bottom drawer
+  shell.appendToDrawer(timeline.element);
+  if (lf?.ledger?.element) shell.appendToDrawer(lf.ledger.element);
+  if (lf?.futures?.element) shell.appendToDrawer(lf.futures.element);
 
   const render = () => {
     const world = store.getState();
@@ -217,26 +269,6 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
       },
     );
 
-    // Mount Causal Ledger and Parallel Futures panels (per docs/ledger-futures/UI_INTEGRATION.md).
-    // The presenter bridges Kiro's FuturePreviewPresenter contract to Kilo's
-    // SceneRenderer previewFuture/cancelFuture API.
-    lf = mountLedgerFutures({
-      store,
-      initial: genesis,
-      request: (body, signal) => requestProposal(body, { signal }),
-      morphEnabled: MORPH_ENABLED,
-      presenter: new SceneRendererFuturePreviewPresenter(renderer!),
-      notify: (message, tone) => shell.toast(message, tone),
-      focusEntity: (id) => {
-        actions.select(id);
-        actions.focus(id);
-      },
-      reducedMotion: () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
-      onError: (e) => console.error(e),
-    });
-    shell.bottom.append(lf.ledger.element);
-    shell.right.append(lf.futures.element);
-
     let previous = store.getState();
     const unsubscribeStore = store.subscribe((world, log) => {
       const id = selection.get();
@@ -265,12 +297,26 @@ async function boot(host: HTMLElement, start: SessionStart, requestReboot: (worl
         event.preventDefault();
         actions.redo();
       } else if (!mod && key === 'escape') {
-        actions.select(null);
+        if (shell.getMode() === 'immersive') {
+          shell.setMode('studio');
+        } else if (shell.getActiveTool()) {
+          shell.setActiveTool(null);
+        } else if (shell.isDrawerOpen()) {
+          shell.setDrawerOpen(false);
+        } else {
+          actions.select(null);
+        }
       } else if (!mod && key === 'f') {
         const id = selection.get();
         if (id) actions.focus(id);
       } else if (!mod && key === 'home') {
         actions.resetCamera();
+      } else if (!mod && key === 't') {
+        // Toggle tools visibility
+        shell.setToolsVisible(!shell.getToolsVisible());
+      } else if (!mod && key === 'b') {
+        // Toggle bottom drawer
+        shell.setDrawerOpen(!shell.isDrawerOpen());
       }
     };
     window.addEventListener('keydown', onKey);

@@ -19,4 +19,6 @@ export interface StudioActions {
   preview(id: EntityId, visual: VisualComponent): void;
   revertPreview(id: EntityId): void;
   notify(message: string, tone?: 'info' | 'warn'): void;
+  /** Collapse/expand a panel. */
+  togglePanel?(side: 'left' | 'right' | 'bottom'): void;
 }

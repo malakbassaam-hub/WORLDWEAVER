@@ -27,6 +27,12 @@ export class TimelinePanel {
       h('div', { class: 'ww-timeline-controls' }, [
         h('div', { class: 'ww-timeline-title' }, [h('h2', { text: 'Timeline' }), this.meta]),
         h('div', { class: 'ww-btn-row' }, [this.undoBtn, this.redoBtn]),
+        h('button', {
+          class: 'ww-panel-collapse',
+          title: 'Collapse panel',
+          attrs: { type: 'button', 'aria-label': 'Collapse Timeline panel' },
+          on: { click: () => this.actions.togglePanel?.('bottom') },
+        }, [icon('chevronDown')]),
       ]),
       h('div', { class: 'ww-rail-wrap' }, [this.rail]),
       h('div', { class: 'ww-timeline-legend' }, [

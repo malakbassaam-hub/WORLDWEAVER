@@ -15,7 +15,7 @@ import { buildFuturePreview, type FuturePreviewPresenter } from '../core/present
 import type { WorldStore } from '../core/store';
 import type { EntityId } from '../core/types';
 import { requestFutureProposal, type FutureTask, type ProposalRequest } from '../director/futureRequest';
-import { clear, h } from './dom';
+import { clear, h, icon } from './dom';
 import { cardSummary, comparisonMatrix, createAvailability, defaultFutureLabel, errorText, MAX_FUTURES, type MatrixRow } from './futuresModel';
 
 export interface FuturesPanelDeps {
@@ -31,6 +31,8 @@ export interface FuturesPanelDeps {
   readonly source?: 'director' | 'user';
   notify?(message: string, tone?: 'info' | 'warn'): void;
   focusEntity?(id: EntityId): void;
+  /** Toggle panel collapse. */
+  togglePanel?: (side: 'left' | 'right' | 'bottom') => void;
 }
 
 interface CardRuntime {
@@ -83,7 +85,16 @@ export class FuturesPanel {
     this.compare = h('section', { class: 'ww-futures-compare', attrs: { 'aria-label': 'Side-by-side comparison' } });
     this.live = h('p', { class: 'ww-lf-sr', attrs: { 'aria-live': 'polite' } });
     this.element = h('section', { class: 'ww-panel ww-glass ww-futures', attrs: { 'aria-labelledby': titleId } }, [
-      h('div', { class: 'ww-panel-head' }, [h('h2', { text: 'Parallel Futures', attrs: { id: titleId } }), this.meta]),
+      h('div', { class: 'ww-panel-head' }, [
+        h('h2', { text: 'Parallel Futures', attrs: { id: titleId } }),
+        this.meta,
+        h('button', {
+          class: 'ww-panel-collapse',
+          title: 'Collapse panel',
+          attrs: { type: 'button', 'aria-label': 'Collapse Parallel Futures panel' },
+          on: { click: () => this.deps.togglePanel?.('right') },
+        }, [icon('chevronRight')]),
+      ]),
       this.previewBar,
       this.baseline,
       h('div', { class: 'ww-futures-create' }, [this.labelInput, this.createBtn]),

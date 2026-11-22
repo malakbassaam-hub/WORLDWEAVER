@@ -11,7 +11,7 @@ import './ledger-futures.css';
 import type { EntryInspection } from '../core/historyView';
 import type { CausalLedgerView } from '../core/ledger';
 import type { EntityId } from '../core/types';
-import { clear, h } from './dom';
+import { clear, h, icon } from './dom';
 import { filterCounts, filterRows, isHexColour, isNavKey, LEDGER_FILTERS, ledgerDetail, ledgerRows, nextIndex, type LedgerDetail, type LedgerFilter, type LedgerRow } from './ledgerModel';
 
 export const LEDGER_MAX_ROWS = 300;
@@ -24,6 +24,8 @@ export interface LedgerPanelDeps {
   /** True if the entity exists in the current world (focus buttons only for those). */
   exists?(id: EntityId): boolean;
   reducedMotion?(): boolean;
+  /** Toggle panel collapse. */
+  togglePanel?: (side: 'left' | 'right' | 'bottom') => void;
 }
 
 let panelSeq = 0;
@@ -62,7 +64,16 @@ export class LedgerPanel {
     this.scroll = h('div', { class: 'ww-ledger-scroll' }, [this.more, this.list, this.stateBox]);
     this.live = h('p', { class: 'ww-lf-sr', attrs: { 'aria-live': 'polite' } });
     this.element = h('section', { class: 'ww-panel ww-glass ww-ledger', attrs: { 'aria-labelledby': titleId } }, [
-      h('div', { class: 'ww-panel-head' }, [h('h2', { text: 'Causal Ledger', attrs: { id: titleId } }), this.meta]),
+      h('div', { class: 'ww-panel-head' }, [
+        h('h2', { text: 'Causal Ledger', attrs: { id: titleId } }),
+        this.meta,
+        h('button', {
+          class: 'ww-panel-collapse',
+          title: 'Collapse panel',
+          attrs: { type: 'button', 'aria-label': 'Collapse Causal Ledger panel' },
+          on: { click: () => this.deps.togglePanel?.('bottom') },
+        }, [icon('chevronDown')]),
+      ]),
       h('p', { class: 'ww-lf-legend', attrs: { 'aria-label': 'Legend' } }, [
         h('span', {}, [h('i', { class: 'ww-lf-key is-recorded' }), 'Recorded']),
         h('span', {}, [h('i', { class: 'ww-lf-key is-observed' }), 'Observed']),

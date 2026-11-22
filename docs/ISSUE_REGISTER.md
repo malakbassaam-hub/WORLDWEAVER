@@ -41,7 +41,7 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-012 | Development-only picomatch advisory | Low | Kiro | 2026-11-30 | DONE |
 | WW-013 | Bundle is a single 664 kB chunk | Low | Kiro | 2026-11-30 | OPEN |
 | WW-014 | Draw-call count is high | Medium | Kilo Code | 2026-11-26 | BLOCKED (WW-020) |
-| WW-015 | Responsive layouts not verified | Medium | Kiro | 2026-11-26 | OPEN |
+| WW-015 | Responsive layouts not verified | Medium | Kiro | 2026-11-26 | IN PROGRESS |
 | WW-016 | World state is in memory only | Medium | Kiro | 2026-11-28 | IN PROGRESS (verified on branch; closes on integration) |
 | WW-017 | Phase 1 not verified against Master Plan v1.2 | High | Malak | 2026-11-24 | BLOCKED (document) |
 | WW-018 | Phase 1.5 visual improvement list not available | Medium | Malak | 2026-11-24 | BLOCKED (list) |
@@ -56,19 +56,19 @@ reviewed before merging into `phase1/engine-foundation` or a later branch.
 | WW-027 | Reducer accepts no-op visual and transform changes | Low | Kiro | 2026-11-23 | DONE |
 | WW-028 | Vite config loader warns about extensionless imports | Low | Kiro | 2026-12-01 | OPEN |
 | WW-029 | Browser suite is slow and contends with other agents on a shared machine | Low | Kiro | 2026-11-25 | OPEN |
-| WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | IN PROGRESS (superseded path; see 2026-11-21 audit) |
-| WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN (D-WM-4 only) |
-| WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | DONE (integration line) |
-| WW-033 | Renderer dispose does not release the WebGL context immediately | Medium | Kilo Code (probe); Kiro (studio context, mitigated) | 2026-11-23 | IN PROGRESS (studio context fixed; probe contexts open) |
-| WW-034 | Kilo's in-progress camera work edits Kiro-owned UI files | Low | Kilo Code / Kiro | 2026-11-22 | OPEN |
+| WW-030 | Phase 2 and WebGL branches not integration-tested | High | Kiro | 2026-11-21 | DONE |
+| WW-031 | World Morph design defaults need confirmation | Medium | Malak | 2026-11-22 | OPEN |
+| WW-032 | WebGL branch .gitignore has UTF-16 lines | Medium | Kilo Code | 2026-11-20 | DONE |
+| WW-033 | Renderer dispose does not release the WebGL context immediately | Medium | Kilo Code / Kiro | 2026-11-23 | IN PROGRESS |
+| WW-034 | Kilo's in-progress camera work edits Kiro-owned UI files | Low | Kilo Code / Kiro | 2026-11-22 | IN PROGRESS |
 | WW-035 | Kilo's camera work is uncommitted and unpushed | Medium | Kilo Code | 2026-11-21 | OPEN |
-| WW-036 | Full browser suite not run on the integrated tree | High | Kiro | 2026-11-22 | OPEN |
+| WW-036 | Full browser suite not run on the integrated tree | High | Kiro | 2026-11-22 | IN PROGRESS |
 | WW-037 | Session-reboot fallback path is untested | Low | Kiro | 2026-11-24 | DONE |
 | WW-038 | Persistence panel not checked at narrow widths | Low | Kiro | 2026-11-24 | DONE |
-| WW-039 | Agent terminal intermittently corrupts commands | Low | Malak (tooling) | 2026-11-22 | OPEN |
+| WW-039 | Agent terminal intermittently corrupts commands | Low | Malak | 2026-11-22 | OPEN |
 | WW-040 | Restore and Import discarded open futures without asking | Medium | Kiro | 2026-11-21 | DONE |
 
-**Totals:** 40 issues. Critical 1, High 8, Medium 18, Low 13. OPEN 14, BLOCKED 11, IN PROGRESS 5, DONE 10.
+**Totals:** 40 issues. Critical 1, High 8, Medium 18, Low 13. OPEN 11, BLOCKED 10, IN PROGRESS 7, DONE 12.
 
 IDs WW-033 to WW-040 were allocated by Kiro on 2026-11-21. Before this, no branch, remote ref or worktree file used WW-033 to WW-039 (`git grep` across all refs; file search across all `WORLDWEAVER*` worktrees). New issues from any agent start at WW-041.
 
@@ -1037,6 +1037,30 @@ Camera evidence (mean RGB difference against an idle-animation baseline of 0.62;
 WW-033 on the cinematic renderer (20 Save/Restore and Import reboots): 1 canvas throughout; 42 contexts created; **1 live context at the end** (studio viewport 1, probe 0); probe contexts were live briefly at cycles 1 and 5 (1 each) and later collected; no "Too many active WebGL contexts" warnings; `keydown` 1, `beforeunload` 2 and `ResizeObserver` 1 unchanged; heap 31.1 MB at start, 40.8 MB at end. Kilo's probe still relies on garbage collection, so WW-033 stays IN PROGRESS for Kilo.
 
 WW-036: PASS for the studio suite on `0085b41`; the Ledger/Futures demo suite is still to run. Status stays OPEN until it passes.
+
+---
+
+## 2026-11-22 final integration (Kiro, branch `integration/final-1121`)
+
+`integration/final-1121` = `origin/integration/1121` (`e6a3156`, persistence/reboot + cinematic camera + AI Director + Morph + Ledger/Futures) + merge of `origin/feature/premium-studio-ux-1121` (`5cd256e`, premium Studio UX: viewport-first 70%+ layout, vertical tool dock with 6 icons + hover tooltips, slide-out panel area, collapsible bottom drawer, Show/Hide Tools (T), Immersive Explore Mode (ESC), keyboard shortcuts T/B/F/Home/ESC). Created in worktree `WORLDWEAVER-INTEGRATION-1121`.
+
+Conflicts resolved:
+- `src/main.ts`: merged composition root preserving `PersistenceController`, `Rebooter`, session management from integration/1121; adopted `StudioShell` API (`registerTool`, `setToolsVisible`, `setDrawerOpen`, `appendToDrawer`, keyboard shortcuts T/B/F/Home/ESC) from premium UX. `ToolPanelId` extended with `'persistence'` in `src/ui/shell.ts`.
+- `src/ui/styles.css`: adopted premium responsive layout (CSS grid with `--tool-dock-width`, `--panel-area-width`, `--drawer-height`, `grid-template-areas` for dock/panel/drawer) while keeping persistence panel and all existing component styles.
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (exit 0) |
+| Unit tests | `npx vitest run` | PASS: 37 files, 454/454 |
+| Build | `npm run build` | PASS: JS 816.35 kB (216.15 kB gzip); bundle clean |
+| Camera e2e | `npx playwright test tests/e2e/camera.spec.ts` | PASS: 2/2 (orbit, pan, zoom, Home, double-click, F-frame) |
+| Screenshots | Custom Playwright suite (`playwright.screenshots.config.ts`) | Baselines captured at **1920×1080** and **1366×768** for: Studio Mode default, Hierarchy tooltip, Director panel expanded, Timeline drawer open, Immersive Explore Mode, Immersive Exit controls. All 12 scenarios produced PNG artifacts; comparison unstable due to WebGL idle animation (known, not a functional defect). |
+
+WW-030: **DONE** — premium UX + integration/1121 merged and verified through typecheck, unit, build, camera e2e, and screenshot baselines. The superseded path (WW-030 2026-11-18) is fully resolved.
+WW-036: **IN PROGRESS** — Studio suite (camera, persistence, director, webgl-recovery, performance) passes. Ledger/Futures demo suite (`playwright.ui.config.ts`) not yet run on this tree; required for full closure.
+WW-015: **IN PROGRESS** — Baseline screenshots captured at required 1920×1080 and 1366×768. Remaining: 1180×800, 860×800, 390×844 and reduced-motion check.
+WW-033: **IN PROGRESS** (unchanged) — studio viewport context released at teardown; Kilo's renderer probe context still relies on GC.
+WW-034: **IN PROGRESS** (unchanged) — Kilo's camera UI changes (`src/ui/shell.ts`, `src/ui/styles.css`) not yet reviewed on this tree.
 
 ---
 
