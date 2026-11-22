@@ -30,6 +30,21 @@ const undoBtn = (page: Page) => page.locator('.ww-topbar [aria-label="Undo"]');
 ame (substring matching would confuse Spire I with Spire II and III). */
 const row = (page: Page, name: string) => page.locator('.ww-tree-row').filter({ has: page.locator('.ww-tree-name').getByText(name, { exact: true }) });
 
+async function openPersistence(page: Page) {
+  await page.getByRole('tab', { name: 'World File' }).click();
+  await expect(page.locator('.ww-persistence')).toBeVisible();
+}
+
+async function openHierarchy(page: Page) {
+  await page.getByRole('tab', { name: 'Scene Hierarchy' }).click();
+  await expect(page.locator('.ww-hierarchy')).toBeVisible();
+}
+
+async function openInspector(page: Page) {
+  await page.getByRole('tab', { name: 'Inspector' }).click();
+  await expect(page.locator('.ww-inspector')).toBeVisible();
+}
+
 async function openStudio(page: Page): Promise<string[]> {
   const errors = watchConsole(page);
   await page.goto('/');
@@ -61,6 +76,7 @@ const GOOD_ENTITY_ISSUE = /./;
 test.describe('World persistence', () => {
   test('the panel is mounted and states the history policy', async ({ page }) => {
     const errors = await openStudio(page);
+    await openPersistence(page);
     await expect(panel(page)).toBeVisible();
     await expect(indicator(page)).toHaveText('All changes saved');
     await expect(page.getByTestId('persistence-history-note')).toContainText('Undo history, the Causal Ledger and Parallel Futures do not survive');
@@ -70,39 +86,55 @@ test.describe('World persistence', () => {
 
   test('unsaved indicator follows edits and returns to saved after undo', async ({ page }) => {
     const errors = await openStudio(page);
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Edited Spire');
+    await openPersistence(page);
     await expect(indicator(page)).toHaveText('Unsaved changes');
     await undoBtn(page).click();
+    await openHierarchy(page);
     await expect(row(page, SPIRE).first()).toBeVisible();
+    await openPersistence(page);
     await expect(indicator(page)).toHaveText('All changes saved');
     expect(errors).toEqual([]);
   });
 
   test('save, reload, restore: world and pinned state come back; history starts fresh', async ({ page }) => {
     const errors = await openStudio(page);
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Saved Spire');
+    await openPersistence(page);
     await button(page, 'Save').click();
     await expect(indicator(page)).toHaveText('All changes saved');
     await expect(button(page, 'Restore')).toBeEnabled();
 
     await page.reload();
+    await openHierarchy(page);
     await expect(entityCount(page)).toHaveText(`${KINGDOM_ENTITIES} entities`);
     // A reload boots the default world; the save is offered, not applied silently.
     await expect(row(page, SPIRE).first()).toBeVisible();
     await expect(row(page, 'Saved Spire')).toHaveCount(0);
 
+    await openPersistence(page);
     await button(page, 'Restore').click(); // fresh session: no confirmation needed
+    // Wait for reboot to complete (new session loaded)
+    await expect(page.locator('canvas.ww-canvas')).toBeVisible();
+    await expect(page.locator('.ww-loader')).toHaveCount(0);
     // The toast lasts 3.8 s, so check it first.
     await expect(page.locator('.ww-toast-host')).toContainText('Undo history, the ledger and futures start fresh');
+    await openHierarchy(page);
     await expect(row(page, 'Saved Spire').first()).toBeVisible();
     await expect(row(page, SPIRE)).toHaveCount(0);
     await expect(entityCount(page)).toHaveText(`${KINGDOM_ENTITIES} entities`);
+    await openPersistence(page);
     await expect(indicator(page)).toHaveText('All changes saved');
     // Pinned citadel is still pinned and still cannot be removed.
+    await openHierarchy(page);
     await expect(row(page, 'Aurelion Citadel').locator('.ww-pin-badge')).toHaveCount(1);
     await row(page, 'Aurelion Citadel').click();
+    await openInspector(page);
     await expect(page.locator('.ww-inspector').getByRole('button', { name: /remove/i }).first()).toBeDisabled();
     // Fresh baseline: no undo history, baseline row says restored, ledger restarted.
+    await openPersistence(page);
     await expect(undoBtn(page)).toBeDisabled();
     await expect(page.locator('.ww-rail .ww-event.is-genesis .ww-event-text')).toContainText('Restored baseline');
     expect(errors).toEqual([]);
@@ -110,23 +142,31 @@ test.describe('World persistence', () => {
 
   test('export then import: file name, round trip, confirmation, no undo history', async ({ page }, info) => {
     const errors = await openStudio(page);
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Exported Spire');
+    await openPersistence(page);
     const exported = await exportWorld(page, info);
     expect(exported.filename).toMatch(/^worldweaver-crystal-kingdom-at-dusk-\d{14}\.worldweaver\.world$/);
 
+    await openHierarchy(page);
     await rename(page, 'Exported Spire', 'Later Spire'); // unsaved change after the export
+    await openPersistence(page);
     await fileInput(page).setInputFiles(exported.path);
     await expect(dialog(page)).toBeVisible();
     await expect(dialog(page)).toContainText('Import “Crystal Kingdom at Dusk”');
     await expect(dialog(page)).toContainText('27 entities');
     await expect(dialog(page)).toContainText('unsaved changes');
+    await openHierarchy(page);
     await expect(row(page, 'Later Spire').first()).toBeVisible(); // nothing applied before confirmation
 
+    await openPersistence(page);
     await dialog(page).getByRole('button', { name: 'Import', exact: true }).click();
+    await openHierarchy(page);
     await expect(row(page, 'Exported Spire').first()).toBeVisible();
     await expect(row(page, 'Later Spire')).toHaveCount(0);
     await expect(entityCount(page)).toHaveText(`${KINGDOM_ENTITIES} entities`);
     await expect(row(page, 'Aurelion Citadel').locator('.ww-pin-badge')).toHaveCount(1);
+    await openPersistence(page);
     await expect(undoBtn(page)).toBeDisabled();
     await expect(page.locator('.ww-rail .ww-event.is-genesis .ww-event-text')).toContainText('Restored baseline');
     expect(errors).toEqual([]);
@@ -134,29 +174,38 @@ test.describe('World persistence', () => {
 
   test('Cancel keeps the current world; Restore asks before discarding unsaved changes', async ({ page }) => {
     const errors = await openStudio(page);
+    await openPersistence(page);
     await button(page, 'Save').click();
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Unsaved Spire');
 
+    await openPersistence(page);
     await button(page, 'Restore').click();
     await expect(dialog(page)).toBeVisible();
     await expect(dialog(page)).toContainText('unsaved changes');
     await dialog(page).getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog(page)).toBeHidden();
+    await openHierarchy(page);
     await expect(row(page, 'Unsaved Spire').first()).toBeVisible();
+    await openPersistence(page);
     await expect(indicator(page)).toHaveText('Unsaved changes');
     await expect(undoBtn(page)).toBeEnabled();
 
     await button(page, 'Restore').click();
     await dialog(page).getByRole('button', { name: 'Restore', exact: true }).click();
+    await openHierarchy(page);
     await expect(row(page, SPIRE).first()).toBeVisible();
     await expect(row(page, 'Unsaved Spire')).toHaveCount(0);
+    await openPersistence(page);
     await expect(undoBtn(page)).toBeDisabled();
     expect(errors).toEqual([]);
   });
 
   test('bad files are refused with a reason and change nothing', async ({ page }, info) => {
     const errors = await openStudio(page);
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Survivor Spire');
+    await openPersistence(page);
     const good = await exportWorld(page, info);
     const goodText = await readFile(good.path, 'utf8');
 
@@ -166,8 +215,10 @@ test.describe('World persistence', () => {
       await fileInput(page).setInputFiles(path);
       await expect(message(page)).toHaveText(expected);
       await expect(dialog(page)).toBeHidden();
+      await openHierarchy(page);
       await expect(row(page, 'Survivor Spire').first()).toBeVisible();
       await expect(entityCount(page)).toHaveText(`${KINGDOM_ENTITIES} entities`);
+      await openPersistence(page);
       await expect(indicator(page)).toHaveText('Unsaved changes'); // the edit is still live
       await expect(undoBtn(page)).toBeEnabled(); // history untouched
     };
@@ -190,8 +241,10 @@ test.describe('World persistence', () => {
 
   test('a full browser store reports the quota error, keeps the world, and the previous save still restores', async ({ page }) => {
     const errors = await openStudio(page);
+    await openPersistence(page);
     await button(page, 'Save').click(); // a good save of the default world
     await expect(button(page, 'Restore')).toBeEnabled();
+    await openHierarchy(page);
     await rename(page, SPIRE, 'Quota Spire');
     // Fill storage to the last character: halve the chunk until even 1 character does not fit.
     const filled = await page.evaluate(() => {
@@ -207,14 +260,18 @@ test.describe('World persistence', () => {
       return i;
     });
     expect(filled).toBeGreaterThan(0);
+    await openPersistence(page);
     await button(page, 'Save').click();
     await expect(message(page)).not.toHaveText('');
     await expect(indicator(page)).toHaveText('Unsaved changes'); // the save did not happen
+    await openHierarchy(page);
     await expect(row(page, 'Quota Spire').first()).toBeVisible(); // the world is unchanged
 
+    await openPersistence(page);
     await button(page, 'Restore').click();
     await expect(dialog(page)).toBeVisible();
     await dialog(page).getByRole('button', { name: 'Restore', exact: true }).click();
+    await openHierarchy(page);
     await expect(row(page, SPIRE).first()).toBeVisible(); // the earlier good save
     await expect(row(page, 'Quota Spire')).toHaveCount(0);
     expect(errors.filter((e) => !/QuotaExceeded|quota/i.test(e))).toEqual([]);

@@ -798,6 +798,20 @@ button, input, textarea { font: inherit; color: inherit; }
   .ww-viewport-hint { display: none; }
 }
 
+@media (max-width: 480px) {
+  :root { --tool-dock-width: 44px; --drawer-height: 180px; }
+  .ww-brand-name, .ww-brand-sub { display: none; }
+  .ww-topbar { padding: 4px 8px; gap: 4px; }
+  .ww-topbar-world { order: 0; flex-basis: auto; flex: 1; min-width: 0; justify-content: center; }
+  .ww-topbar-world .ww-chip { display: none; }
+  .ww-topbar-actions { margin-left: 0; gap: 2px; }
+  .ww-topbar-actions .ww-btn:not(.ww-icon-btn) span { display: none; }
+  .ww-topbar-actions .ww-divider { display: none; }
+  .ww-tool-dock { padding: 2px; gap: 2px; }
+  .ww-tool-btn { width: 36px; height: 36px; }
+  .ww-tool-btn .ww-icon { width: 18px; height: 18px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   .ww-title-card { opacity: 1; }
