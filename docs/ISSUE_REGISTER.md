@@ -1064,6 +1064,31 @@ WW-034: **IN PROGRESS** (unchanged) — Kilo's camera UI changes (`src/ui/shell.
 
 ---
 
+## 2026-11-22 URGENT VISUAL ACCEPTANCE REPAIR (branch `ux-repair-1122`)
+
+**Root cause:** CSS Grid layout allocated explicit columns/rows for side panel (320px) and bottom drawer (280px) even when closed. Transforms moved panels off-screen but grid tracks still reserved space, collapsing viewport to ~45% at 1727px.
+
+**Fix applied to `src/ui/styles.css`:**
+- Panel area (`.ww-panel-area`): changed from `grid-area: panel` to `position: absolute; top:0; right:0; bottom:0; width:var(--panel-area-width); transform:translateX(100%)` — slides in from right, zero grid footprint when closed
+- Bottom drawer (`.ww-bottom-drawer`): changed from `grid-area: drawer` + relative positioning to `position: absolute; left:0; right:0; bottom:0; height:var(--drawer-height); transform:translateY(100%)` — slides up from bottom, zero grid footprint when closed
+- Grid templates simplified: `.ww-studio.has-active-tool` and `.ww-studio.is-immersive` no longer allocate panel/drawer tracks; viewport always gets `1fr`
+- Responsive rules updated to match absolute positioning
+
+| Check | Command | Result |
+|---|---|---|
+| Typecheck | `npm run typecheck` | PASS (exit 0) |
+| Unit tests | `npx vitest run` | PASS: 37 files, 454/454 |
+| Build | `npm run build` | PASS: JS 816.35 kB (216.15 kB gzip); bundle clean |
+| Visual acceptance | Custom Playwright suite | **1920×1080**: 84.0% (default), 84.0% (panel), 84.0% (drawer), 100% (immersive), 94.3% (restored) ✅<br>**1727×900**: 89.9% (default) ✅<br>**1366×768**: 81.8% (default) ✅<br>**1180×800**: 77.9% (default) ✅<br>**860×800**: 73.9% (drawer) ✅<br>**390×844**: 62.5% (default) ⚠️ (mobile topbar wraps; known limitation) |
+| Screenshots captured | `test-results/screenshots/` | Studio default, Director panel, Timeline drawer, Immersive, Restored at 1920, 1727, 1366, 1180, 860; 390 pending |
+| Camera e2e | `npx playwright test tests/e2e/camera.spec.ts` | RUNNING (SwiftShader slow; previously PASS on integration/final-1121) |
+| Persistence e2e | `npx playwright test tests/e2e/persistence.spec.ts` | RUNNING (previously PASS on integration/final-1121) |
+
+**WW-015: IN PROGRESS** — 5/6 resolutions >=70% viewport; 390×844 at 62.5% due to wrapped topbar (mobile). Remaining: 390×844 screenshots, reduced-motion check.
+**WW-036: IN PROGRESS** — Visual acceptance PASS at desktop resolutions; camera/persistence e2e running.
+
+---
+
 ## Change log
 
 | Date | Change |

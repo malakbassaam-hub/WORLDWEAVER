@@ -69,28 +69,27 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 
 .ww-studio.has-active-tool {
-  grid-template-columns: var(--tool-dock-width) var(--panel-area-width) 1fr;
-  grid-template-areas:
-    'topbar topbar topbar'
-    'dock panel viewport'
-    'drawer drawer drawer';
-}
-
-.ww-studio.tools-hidden.has-active-tool {
-  grid-template-columns: var(--panel-area-width) 1fr;
+  grid-template-columns: var(--tool-dock-width) 1fr;
   grid-template-areas:
     'topbar topbar'
-    'panel viewport'
+    'dock viewport'
     'drawer drawer';
 }
 
-.ww-studio.is-immersive {
+.ww-studio.tools-hidden.has-active-tool {
   grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr auto;
   grid-template-areas:
     'topbar'
     'viewport'
     'drawer';
+}
+
+.ww-studio.is-immersive {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    'topbar'
+    'viewport';
 }
 
 .ww-studio.is-immersive.tools-hidden {
@@ -213,20 +212,27 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ------------------------------------------------------------ panel area */
 
 .ww-panel-area {
-  grid-area: panel;
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--panel-area-width);
+  max-width: calc(100% - var(--tool-dock-width));
   display: flex;
   flex-direction: column;
   background: var(--glass-strong);
-  border-right: 1px solid var(--glass-edge);
+  border-left: 1px solid var(--glass-edge);
   backdrop-filter: blur(18px) saturate(150%);
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   overflow: hidden;
   z-index: 4;
-  transform: translateX(-100%);
+  transform: translateX(100%);
   transition: transform 0.3s var(--ease);
+  pointer-events: none;
 }
 .ww-panel-area.is-open {
   transform: translateX(0);
+  pointer-events: auto;
 }
 .ww-panel-content {
   flex: 1;
@@ -245,8 +251,10 @@ button, input, textarea { font: inherit; color: inherit; }
 /* ------------------------------------------------------------ bottom drawer */
 
 .ww-bottom-drawer {
-  grid-area: drawer;
-  position: relative;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: var(--drawer-height);
   max-height: 50vh;
   background: var(--glass-strong);
@@ -770,8 +778,8 @@ button, input, textarea { font: inherit; color: inherit; }
   :root { --tool-dock-width: 48px; --panel-area-width: 100%; --drawer-height: 220px; }
   .ww-studio { grid-template-columns: var(--tool-dock-width) 1fr; grid-template-areas: 'topbar topbar' 'dock viewport' 'drawer drawer'; }
   .ww-studio.tools-hidden { grid-template-columns: 1fr; grid-template-areas: 'topbar' 'viewport' 'drawer'; }
-  .ww-studio.has-active-tool { grid-template-columns: 1fr; grid-template-areas: 'topbar' 'panel' 'drawer'; }
-  .ww-studio.tools-hidden.has-active-tool { grid-template-columns: 1fr; grid-template-areas: 'topbar' 'panel' 'drawer'; }
+  .ww-studio.has-active-tool { grid-template-columns: 1fr; grid-template-areas: 'topbar' 'viewport' 'drawer'; }
+  .ww-studio.tools-hidden.has-active-tool { grid-template-columns: 1fr; grid-template-areas: 'topbar' 'viewport' 'drawer'; }
   .ww-tool-dock { flex-direction: row; flex-wrap: wrap; justify-content: center; padding: 4px; gap: 4px; border-right: none; border-bottom: 1px solid var(--glass-edge); }
   .ww-tool-btn { width: 40px; height: 40px; }
   .ww-tool-tooltip { top: auto; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); }
