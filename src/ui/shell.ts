@@ -233,6 +233,16 @@ export class StudioShell {
 
   /** Append content to bottom drawer. */
   appendToDrawer(element: HTMLElement): void {
+    // Set role and id for tabpanel if not already set (ledger, futures, timeline)
+    if (!element.hasAttribute('role')) element.setAttribute('role', 'tabpanel');
+    if (!element.hasAttribute('id')) {
+      const toolId = element.classList.contains('ww-ledger') ? 'ledger' : 
+                     element.classList.contains('ww-futures') ? 'futures' : 
+                     element.classList.contains('ww-timeline') ? 'timeline' : '';
+      if (toolId) element.setAttribute('id', `panel-${toolId}`);
+    }
+    element.setAttribute('aria-hidden', 'true');
+    element.hidden = true;
     this.bottomDrawerContent.append(element);
   }
 
@@ -250,6 +260,12 @@ export class StudioShell {
     this.panelArea.classList.toggle('is-open', hasActiveTool);
     this.panelArea.setAttribute('aria-hidden', String(!hasActiveTool));
     for (const panel of this.panelContent.querySelectorAll<HTMLElement>('[role="tabpanel"]')) {
+      const isActive = panel.id === `panel-${this.activeTool}`;
+      panel.hidden = !isActive;
+      panel.setAttribute('aria-hidden', String(!isActive));
+    }
+    // Also update drawer content for timeline/ledger/futures tabs
+    for (const panel of this.bottomDrawerContent.querySelectorAll<HTMLElement>('[role="tabpanel"]')) {
       const isActive = panel.id === `panel-${this.activeTool}`;
       panel.hidden = !isActive;
       panel.setAttribute('aria-hidden', String(!isActive));
